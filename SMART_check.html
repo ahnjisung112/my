@@ -14632,8 +14632,11 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         document.body.classList.remove("sc-ux");
       }
     } else if (t === "ra-input") {
+      /* 결과확인(5단계)에서 뒤로가기 — 4단계(안전대책)는 모바일 흐름에서
+         화면으로 노출되지 않고 3단계에서 자동 통과되므로, 되돌아갈 곳은
+         사용자가 실제로 본 마지막 화면인 3단계(위험성평가)여야 함 */
       state.screen = "ra-input";
-      state.raStep = Math.min(4, state.raStep || 4);
+      state.raStep = 3;
     } else if (t) {
       state.screen = t;
     }
