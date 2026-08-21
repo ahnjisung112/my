@@ -13468,6 +13468,31 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     doc.addImage(dataUrl, fmt, x, y, w, h, undefined, "NONE");
     setupPdfFont(doc);
   }
+
+  /** RA/SC PDF 공용: 표 헤더 행(색상 채움 셀 + 중앙정렬 텍스트) 렌더링.
+   *  o: { x, y, cols, headers, headerH, fill, border, text, fontSize, textYOffset,
+   *       twoLineHeader?: { match, a, b, y1, y2 } } — 각 색상은 [r,g,b] */
+  function drawPdfHeaderRow(doc, o) {
+    var hx = o.x;
+    o.headers.forEach(function (h, ci) {
+      doc.setFillColor(o.fill[0], o.fill[1], o.fill[2]);
+      doc.setDrawColor(o.border[0], o.border[1], o.border[2]);
+      doc.rect(hx, o.y, o.cols[ci], o.headerH, "FD");
+      doc.setTextColor(o.text[0], o.text[1], o.text[2]);
+      doc.setFontSize(o.fontSize);
+      setupPdfFont(doc);
+      var cx = hx + o.cols[ci] / 2;
+      if (o.twoLineHeader && h === o.twoLineHeader.match) {
+        pdfText(doc, o.twoLineHeader.a, cx, o.y + o.twoLineHeader.y1, { align: "center" });
+        pdfText(doc, o.twoLineHeader.b, cx, o.y + o.twoLineHeader.y2, { align: "center" });
+      } else {
+        pdfText(doc, h, cx, o.y + o.headerH / 2 + o.textYOffset, { align: "center" });
+      }
+      hx += o.cols[ci];
+    });
+    doc.setTextColor(0, 0, 0);
+  }
+
   function generatePdf() {
     var itemIds = getCurrentItemIds().slice();
     if (isRaItemIds(itemIds)) return generateRaPdf(itemIds);
@@ -13583,18 +13608,11 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var lineH = 3.4;
 
     function drawRaHeader(topY) {
-      var hx = ml;
-      headers.forEach(function (h, ci) {
-        doc.setFillColor(navy[0], navy[1], navy[2]);
-        doc.setDrawColor(170, 170, 170);
-        doc.rect(hx, topY, cols[ci], headerH, "FD");
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(7.5);
-        setupPdfFont(doc);
-        pdfText(doc, h, hx + cols[ci] / 2, topY + headerH / 2 + 1, { align: "center" });
-        hx += cols[ci];
+      drawPdfHeaderRow(doc, {
+        x: ml, y: topY, cols: cols, headers: headers, headerH: headerH,
+        fill: navy, border: [170, 170, 170], text: [255, 255, 255],
+        fontSize: 7.5, textYOffset: 1
       });
-      doc.setTextColor(0, 0, 0);
     }
 
     function newRaPage(drawHeader) {
@@ -13821,25 +13839,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var headerFs = 9;
 
     function drawHeaderRow(topY) {
-      var hx = ml;
-      doc.setDrawColor(0, 0, 0);
-      headers.forEach(function (h, ci) {
-        doc.setFillColor(232, 232, 232);
-        doc.setDrawColor(0, 0, 0);
-        doc.rect(hx, topY, cols[ci], headerH, "FD");
-        doc.setTextColor(40, 40, 40);
-        doc.setFontSize(headerFs);
-        setupPdfFont(doc);
-        var cx = hx + cols[ci] / 2;
-        if (h === "해당없음") {
-          pdfText(doc, "해당", cx, topY + 4.2, { align: "center" });
-          pdfText(doc, "없음", cx, topY + 8.4, { align: "center" });
-        } else {
-          pdfText(doc, h, cx, topY + headerH / 2 + 1.2, { align: "center" });
-        }
-        hx += cols[ci];
+      drawPdfHeaderRow(doc, {
+        x: ml, y: topY, cols: cols, headers: headers, headerH: headerH,
+        fill: [232, 232, 232], border: [0, 0, 0], text: [40, 40, 40],
+        fontSize: headerFs, textYOffset: 1.2,
+        twoLineHeader: { match: "해당없음", a: "해당", b: "없음", y1: 4.2, y2: 8.4 }
       });
-      doc.setTextColor(0, 0, 0);
       doc.setDrawColor(0, 0, 0);
       doc.setFontSize(8);
       setupPdfFont(doc);
