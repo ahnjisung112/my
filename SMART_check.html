@@ -12778,6 +12778,26 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   var ITEM_MAP = {};
   ITEMS.forEach(function (it) { ITEM_MAP[it.item_id] = it; });
 
+  /* 개발자 콘솔 전용 점검: RA 원장(ledger) 데이터의 빈도×강도 산식과
+     저장된 잔여위험성(ledger_residual_risk) 값이 어긋나는 항목을 찾아 경고.
+     UI/데이터를 바꾸지 않고 console.warn만 남김 (데이터 정합성 회귀 감시용) */
+  function checkRaLedgerConsistency() {
+    var mismatches = [];
+    ITEMS.forEach(function (it) {
+      if (it.ledger_residual_risk === null || it.ledger_residual_risk === undefined) return;
+      var f = Number(it.ledger_frequency), i = Number(it.ledger_intensity), r = Number(it.ledger_residual_risk);
+      if (isNaN(f) || isNaN(i) || isNaN(r)) return;
+      var expected = f * i;
+      if (expected !== r) {
+        mismatches.push({ item_id: it.item_id, ledger_frequency: f, ledger_intensity: i, expected_score: expected, ledger_residual_risk: r });
+      }
+    });
+    if (mismatches.length) {
+      console.warn("[SMART] RA 원장 정합성 점검: 빈도×강도 ≠ 잔여위험성 항목 " + mismatches.length + "건 발견");
+      if (console.table) console.table(mismatches); else console.warn(mismatches);
+    }
+  }
+
   var K_RESULTS = "smart_v7_results";
   var K_PHOTOS = "smart_v7_photos";
   var K_INSPECTOR = "smart_v7_inspector";
@@ -17686,6 +17706,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
 
   function boot() {
     try {
+      checkRaLedgerConsistency();
       initNativeChrome();
       applySmartLogo();
       var ver = document.getElementById("hdr-version");
