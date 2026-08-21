@@ -7335,6 +7335,11 @@ window.SMART_ITEMS = [
   --smart-green-100: #EAF8EF;
   --smart-green-050: #F4FCF6;
 
+  /* 선택 상태 전용 강조색 — 상/중/하 위험도 배지(빨강/주황/초록)와
+     의미가 겹치지 않도록 별도 색상 계열을 사용 */
+  --smart-accent: #7C3AED;
+  --smart-accent-soft: #F3EEFF;
+
   --smart-white: #FFFFFF;
   --smart-bg: #F4F7FB;
   --smart-surface: #FFFFFF;
@@ -10196,8 +10201,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
      의미가 겹치지 않도록 초록 대신 중립 파랑을 사용 */
   .mobile-freq-chip.is-selected,
   .mobile-freq-chip.is-on {
-    background: var(--smart-blue-700);
-    border-color: var(--smart-blue-700);
+    background: var(--smart-accent);
+    border-color: var(--smart-accent);
     color: #fff;
     font-weight: 700;
   }
@@ -10489,8 +10494,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
   .mobile-freq-chip .chip-n { font-size: 14px; font-weight: 800; color: var(--smart-text); }
   .mobile-freq-chip .chip-lbl { font-size: 9px; color: var(--smart-text-sub); font-weight: 600; }
   .mobile-freq-chip.is-on {
-    background: var(--smart-blue-700) !important;
-    border-color: var(--smart-blue-700) !important;
+    background: var(--smart-accent) !important;
+    border-color: var(--smart-accent) !important;
   }
   .mobile-freq-chip.is-on .chip-n,
   .mobile-freq-chip.is-on .chip-lbl { color: #fff; }
@@ -11417,8 +11422,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
 
   body.ra-mockup .mobile-freq-chip.is-selected,
   body.ra-mockup .mobile-freq-chip.is-on{
-    background: var(--smart-blue-700);
-    border-color: var(--smart-blue-700);
+    background: var(--smart-accent);
+    border-color: var(--smart-accent);
     color: #fff;
     font-weight: 700;
   }
@@ -11692,8 +11697,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
   body.ra-mockup .mobile-freq-chip .chip-n{ font-size: 14px; font-weight: 800; color: var(--smart-text); }
   body.ra-mockup .mobile-freq-chip .chip-lbl{ font-size: 9px; color: var(--smart-text-sub); font-weight: 600; }
   body.ra-mockup .mobile-freq-chip.is-on{
-    background: var(--smart-blue-700) !important;
-    border-color: var(--smart-blue-700) !important;
+    background: var(--smart-accent) !important;
+    border-color: var(--smart-accent) !important;
   }
   body.ra-mockup .mobile-freq-chip.is-on .chip-n,
   body.ra-mockup .mobile-freq-chip.is-on .chip-lbl{ color: #fff; }
@@ -12136,6 +12141,63 @@ body.ra-mockup .mobile-chevron {
 #ra-preview-body:has(+ .mobile-preview-action-bar:not([hidden])) {
   padding-bottom: 92px;
 }
+/* 결과 요약 화면: 위험도 분포를 한눈에 보여주는 막대 + 상/중/하 카드 */
+.mobile-risk-dist-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  font-size: 13px; font-weight: 700; color: var(--smart-text); margin-bottom: 10px;
+}
+.mobile-risk-dist-total { font-size: 12px; font-weight: 500; color: var(--smart-text-sub); }
+.mobile-risk-dist-bar {
+  height: 12px; border-radius: 999px; overflow: hidden; display: flex; margin-bottom: 12px;
+  background: var(--smart-line);
+}
+.mobile-risk-dist-bar > span { display: block; height: 100%; }
+
+/* PC 위험성평가 워크스페이스: 좌측 선택 공종 목록 + 우측 상세 (마스터-디테일) */
+.pc-workspace {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+.pc-proc-nav {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 640px;
+  overflow-y: auto;
+}
+.pc-proc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--smart-surface);
+  border: 1px solid var(--smart-line);
+  border-radius: var(--smart-radius-md);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pc-proc-row.is-active {
+  background: var(--smart-blue-050);
+  border-color: var(--smart-blue-700);
+}
+.pc-proc-ico { flex: 0 0 auto; display: flex; }
+.pc-proc-ico .process-png { width: 26px; height: 26px; }
+.pc-proc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pc-proc-name { font-size: 13.5px; font-weight: 700; color: var(--smart-text); }
+.pc-proc-sub { font-size: 11px; color: var(--smart-text-sub); }
+.pc-proc-count {
+  flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--smart-text-sub);
+  background: var(--smart-bg); padding: 2px 8px; border-radius: 999px;
+}
+.pc-proc-row.is-active .pc-proc-count { background: var(--smart-blue-700); color: #fff; }
+.pc-detail { flex: 1 1 auto; min-width: 0; }
+.pc-detail-head { margin-bottom: 12px; }
+.pc-detail-title { font-size: 15px; font-weight: 800; color: var(--smart-text); }
+
 .mobile-action-bar .mobile-btn-primary,
 .mobile-action-bar .mobile-btn-success,
 .mobile-action-bar .mobile-btn-secondary,
@@ -15754,6 +15816,95 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     html += "</div></div>";
     return html;
   }
+  /* PC 전용: 좌측 선택 공종 목록 + 우측 위험요인 상세(마스터-디테일).
+     공종 추가/제거는 여전히 공종선택(2단계)에서만 — 여기서는 조회·포커스만 한다. */
+  function renderRaDesktopStep3() {
+    var procs = getRaSelectedProcs();
+    if (!state.raFocusSub || !procs.some(function (p) { return p.subId === state.raFocusSub; })) {
+      state.raFocusSub = procs.length ? procs[0].subId : null;
+    }
+    var focusProc = null;
+    procs.forEach(function (p) { if (p.subId === state.raFocusSub) focusProc = p; });
+
+    var doneAll = 0, totalAll = 0;
+    procs.forEach(function (p) {
+      totalAll += p.itemIds.length;
+      p.itemIds.forEach(function (id) {
+        ensureRaResultFromLedger(id);
+        var r = state.results[id] || {};
+        if (calcRiskLevel(r.frequency, r.intensity)) doneAll++;
+      });
+    });
+    var pct = totalAll ? Math.round(doneAll / totalAll * 100) : 0;
+
+    var html = '<div class="mobile-screen pc-workspace-screen">' + renderMobileStepper();
+    html += '<h1 class="mobile-screen-title">위험성 평가</h1>';
+    html += '<p class="mobile-screen-sub">공종을 선택해 빈도×강도를 산정하세요</p>';
+    html += '<div class="mobile-progress"><div class="mobile-progress-label">산정 완료 ' + doneAll + ' / ' + totalAll + '</div>' +
+      '<div class="mobile-progress-bar"><span style="width:' + pct + '%"></span></div></div>';
+
+    html += '<div class="pc-workspace">';
+
+    html += '<div class="pc-proc-nav">';
+    procs.forEach(function (p) {
+      var pdone = 0;
+      p.itemIds.forEach(function (id) {
+        var r = state.results[id] || {};
+        if (calcRiskLevel(r.frequency, r.intensity)) pdone++;
+      });
+      var active = p.subId === state.raFocusSub;
+      var ico = processIconKey(p.name);
+      html += '<button type="button" class="pc-proc-row' + (active ? " is-active" : "") + '" data-pc-focus-proc="' + esc(p.subId) + '">' +
+        '<span class="pc-proc-ico">' + processPictogram(ico) + '</span>' +
+        '<span class="pc-proc-body"><span class="pc-proc-name">' + esc(p.name) + '</span>' +
+        '<span class="pc-proc-sub">산정 ' + pdone + ' / ' + p.itemIds.length + '</span></span>' +
+        '<span class="pc-proc-count">' + p.itemIds.length + '</span></button>';
+    });
+    html += '</div>';
+
+    html += '<div class="pc-detail">';
+    if (focusProc) {
+      var ids = focusProc.itemIds;
+      html += '<div class="pc-detail-head"><span class="pc-detail-title">' + esc(focusProc.name) +
+        ' · 위험요인 ' + ids.length + '건</span></div>';
+      html += '<div class="mobile-risk-accordion">';
+      ids.forEach(function (id, i) {
+        var it = ITEM_MAP[id];
+        if (!it) return;
+        var r = state.results[id];
+        var lv = raHazardLevel(r);
+        var open = state.raExpandedRisk === id;
+        var scored = !!lv;
+        var scoreTxt = "";
+        if (r.frequency && r.intensity) {
+          scoreTxt = '<span class="mobile-risk-score">' + esc(String(r.frequency)) + "×" +
+            esc(String(r.intensity)) + "=" + esc(String(Number(r.frequency) * Number(r.intensity))) + "</span>";
+        }
+        html += '<div class="mobile-risk-item' + (scored ? " is-scored" : "") + '" data-item="' + esc(id) + '">' +
+          '<button type="button" class="mobile-risk-header" data-ra-expand-risk="' + esc(id) + '">' +
+          '<span class="mobile-risk-no">' + String(i + 1).padStart(2, "0") + "</span>" +
+          '<span class="mobile-risk-name">' + esc(it.item_name) + "</span>" +
+          '<span class="mobile-risk-level-row">' +
+          scoreTxt +
+          (scored ? levelMarkHtml(lv) : '<span class="smart-level-mark lv-none">미산정</span>') +
+          "</span>" +
+          '<span class="mobile-chevron">' + (open ? "˄" : "˅") + "</span></button>";
+        if (open) {
+          html += '<div class="mobile-risk-body">' +
+            '<div class="mobile-field"><label>발생 가능성(빈도)</label>' +
+            scoreChipHtml(id, "frequency", r.frequency || "", false) + "</div>" +
+            '<div class="mobile-field"><label>중대성(강도)</label>' +
+            scoreChipHtml(id, "intensity", r.intensity || "", isLedgerIntensityLocked(it)) + "</div></div>";
+        }
+        html += "</div>";
+      });
+      html += "</div>";
+    } else {
+      html += '<div class="smart-empty">선택된 공종이 없습니다. 공종선택에서 공종을 반영하세요.</div>';
+    }
+    html += "</div></div></div>";
+    return html;
+  }
   function renderRaMobileStep4() {
     var ids = getRaSelectedItemIds();
     var conf = raMeasureConfirmCount();
@@ -15820,6 +15971,23 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<div class="mobile-stat mobile-stat-half"><span class="lbl">선택 공종</span><span class="val">' + (state.raSelSubs || []).length +
       "<small> / " + getRaSubs().length + "</small></span></div>" +
       '<div class="mobile-stat mobile-stat-half"><span class="lbl">반영 위험요인</span><span class="val">' + total + "<small>건</small></span></div></div>";
+    if (total) {
+      var pHigh = Math.round(counts.high / total * 100);
+      var pMid = Math.round(counts.mid / total * 100);
+      var pLow = Math.max(0, 100 - pHigh - pMid);
+      html += '<div class="mobile-form-card mobile-risk-dist">' +
+        '<div class="mobile-risk-dist-head"><span>위험도 분포</span><span class="mobile-risk-dist-total">전체 ' + total + '건</span></div>' +
+        '<div class="mobile-risk-dist-bar">' +
+        (pHigh ? '<span style="width:' + pHigh + '%;background:var(--smart-danger)"></span>' : "") +
+        (pMid ? '<span style="width:' + pMid + '%;background:var(--smart-warning)"></span>' : "") +
+        (pLow ? '<span style="width:' + pLow + '%;background:var(--smart-safe)"></span>' : "") +
+        "</div>" +
+        '<div class="mobile-risk-break mobile-risk-break-3">' +
+        '<div class="rb high"><b>' + counts.high + '</b><em>상</em></div>' +
+        '<div class="rb mid"><b>' + counts.mid + '</b><em>중</em></div>' +
+        '<div class="rb low"><b>' + counts.low + '</b><em>하</em></div>' +
+        "</div></div>";
+    }
     if (counts.unset) {
       html += '<div class="mobile-unset-note">미산정 ' + counts.unset + "건</div>";
     }
@@ -16212,7 +16380,9 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     if (step > 4) step = 4;
     state.raStep = step;
     markRaVisited(step);
-    /* PC·모바일 공통 시안 UI */
+    /* 3단계(위험성평가)는 PC 폭에서 공종목록+상세 마스터-디테일 레이아웃 사용 */
+    if (step === 3 && !isPhonePreview()) return renderRaDesktopStep3();
+    /* 그 외 단계는 PC·모바일 공통 시안 UI */
     return renderRaMobileInput();
   }
 
@@ -16440,6 +16610,14 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     main.querySelectorAll("[data-ra-focus-item]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         state.raFocusItem = btn.getAttribute("data-ra-focus-item");
+        render();
+      });
+    });
+    /* PC 위험성평가 워크스페이스: 좌측 목록에서 공종 포커스만 전환(선택 변경 아님) */
+    main.querySelectorAll("[data-pc-focus-proc]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.raFocusSub = btn.getAttribute("data-pc-focus-proc");
+        state.raExpandedRisk = null;
         render();
       });
     });
@@ -17368,6 +17546,15 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       if (state._resizeTimer) clearTimeout(state._resizeTimer);
       state._resizeTimer = setTimeout(function () {
         if (state.screen === "ra-input" || state.screen === "ra-result") {
+          /* 3단계 위험성평가는 모바일/PC 레이아웃이 아예 다른 함수라서,
+             폭이 그 경계를 넘으면(휴대폰↔PC 전환) 다시 렌더링해야 함 */
+          var nowPhone = isPhonePreview();
+          if (state.raStep === 3 && state._lastPhonePreview !== undefined && state._lastPhonePreview !== nowPhone) {
+            state._lastPhonePreview = nowPhone;
+            render();
+            return;
+          }
+          state._lastPhonePreview = nowPhone;
           updateMobileActionBar();
         }
         syncRaPreviewOrientation();
