@@ -12254,6 +12254,17 @@ body.ra-mockup .mobile-form-card.mobile-risk-matrix { display: none; }
   flex-direction: column;
   gap: 14px;
 }
+.pc-proc-nav-wrap { position: relative; }
+/* 모바일 가로 스크롤 칩 목록: 화면 밖에 더 있는 카드가 있음을 알려주는 페이드 힌트.
+   PC(701px 이상)는 세로 스크롤 목록으로 바뀌므로 숨김 */
+.pc-proc-nav-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 4px;
+  width: 36px;
+  background: linear-gradient(to right, transparent, var(--smart-bg) 75%);
+  pointer-events: none;
+}
 .pc-proc-nav {
   display: flex;
   flex-direction: row;
@@ -12306,8 +12317,10 @@ body.ra-mockup .mobile-form-card.mobile-risk-matrix { display: none; }
     align-items: flex-start;
     gap: 20px;
   }
+  .pc-proc-nav-wrap { flex: 0 0 340px; }
+  .pc-proc-nav-wrap::after { display: none; }
   .pc-proc-nav {
-    flex: 0 0 340px;
+    width: 100%;
     flex-direction: column;
     gap: 8px;
     max-height: 720px;
@@ -16010,7 +16023,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
 
     html += '<div class="pc-workspace">';
 
-    html += '<div class="pc-proc-nav">';
+    html += '<div class="pc-proc-nav-wrap"><div class="pc-proc-nav" role="tablist" aria-label="공종 목록">';
     procs.forEach(function (p) {
       var pdone = 0;
       p.itemIds.forEach(function (id) {
@@ -16019,13 +16032,14 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       });
       var active = p.subId === state.raFocusSub;
       var ico = p.icon || processIconKey(p.name);
-      html += '<button type="button" class="pc-proc-row' + (active ? " is-active" : "") + '" data-pc-focus-proc="' + esc(p.subId) + '">' +
+      html += '<button type="button" class="pc-proc-row' + (active ? " is-active" : "") + '" data-pc-focus-proc="' + esc(p.subId) +
+        '" role="tab" aria-selected="' + (active ? "true" : "false") + '" aria-current="' + (active ? "true" : "false") + '">' +
         '<span class="pc-proc-ico">' + processPictogram(ico) + '</span>' +
         '<span class="pc-proc-body"><span class="pc-proc-name">' + esc(p.name) + '</span>' +
         '<span class="pc-proc-sub">산정 ' + pdone + ' / ' + p.itemIds.length + '</span></span>' +
         '<span class="pc-proc-count">' + p.itemIds.length + '</span></button>';
     });
-    html += '</div>';
+    html += '</div></div>';
 
     html += '<div class="pc-detail">';
     if (focusProc) {
