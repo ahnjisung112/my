@@ -12790,6 +12790,21 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   var DB_NAME = "smart_v7_db";
   var IDB_VER = 1;
 
+  /* 앱 전역에서 반복 사용되는 타이밍/임계값 상수 — 여러 곳에 흩어져 있던 매직넘버를 한곳에 모음 */
+  var UI_TIMING = {
+    toastDurationMs: 2800,      /* 토스트 메시지 표시 시간 */
+    resizeDebounceMs: 200,      /* 창 크기 변경 리스너 debounce */
+    searchDebounceMs: 200,      /* 위험성평가 항목 검색 입력 debounce */
+    screenTransitionMs: 240,    /* 화면 전환 애니메이션(.screen-in) 지속 시간 */
+    printOpenDelayMs: 350       /* 인쇄용 새 창을 연 뒤 print() 호출 전 대기 시간 */
+  };
+  var PHOTO_RESIZE = {
+    maxSidePx: 1920,            /* 리사이즈 후 긴 변 최대 길이 (A4 인쇄 ~200-250dpi 기준) */
+    maxBytes: 1200000,          /* 이 크기를 넘으면 품질을 낮춰 재시도 */
+    qualityStep: 0.05,          /* 재시도마다 낮출 품질 단위 */
+    minQuality: 0.75            /* 품질을 낮추는 재시도의 하한선 */
+  };
+
   var storeMode = "memory";
   var idb = null;
   var mem = {};
@@ -13023,7 +13038,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     el.className = "toast";
     el.textContent = msg;
     layer.appendChild(el);
-    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2800);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, UI_TIMING.toastDurationMs);
   }
   function debounceSave() {
     if (saveTimer) clearTimeout(saveTimer);
@@ -13346,7 +13361,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       reader.onload = function () {
         var img = new Image();
         img.onload = function () {
-          var maxSide = 1920;
+          var maxSide = PHOTO_RESIZE.maxSidePx;
           var w = img.width, h = img.height;
           if (w > maxSide || h > maxSide) {
             if (w > h) { h = Math.round(h * maxSide / w); w = maxSide; }
@@ -13364,7 +13379,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
             dataUrl = canvas.toDataURL("image/jpeg", q);
             binLen = atob(dataUrl.split(",")[1]).length;
             /* 상한 ~1.2MB, 하한 품질 0.75 유지(인쇄 가독) */
-            if (binLen > 1200000 && q > 0.75) { q -= 0.05; tryQuality(); return; }
+            if (binLen > PHOTO_RESIZE.maxBytes && q > PHOTO_RESIZE.minQuality) { q -= PHOTO_RESIZE.qualityStep; tryQuality(); return; }
             var thumbCanvas = document.createElement("canvas");
             var tw = 160, th = Math.round(160 * h / w);
             thumbCanvas.width = tw; thumbCanvas.height = th;
@@ -14228,7 +14243,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       "</style></head><body>" +
       body.innerHTML + "</body></html>");
     w.document.close();
-    setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 350);
+    setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, UI_TIMING.printOpenDelayMs);
   }
 
   function openPdfActionModal(pack, opts) {
@@ -14615,7 +14630,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       render();
       main.classList.remove("screen-out");
       main.classList.add("screen-in");
-      setTimeout(function () { main.classList.remove("screen-in"); }, 240);
+      setTimeout(function () { main.classList.remove("screen-in"); }, UI_TIMING.screenTransitionMs);
       if (afterRender) afterRender();
     }, 90);
   }
@@ -16790,7 +16805,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
           render();
           var el = main.querySelector("#ra-item-search");
           if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} }
-        }, 200);
+        }, UI_TIMING.searchDebounceMs);
       });
     }
     main.querySelectorAll("[data-meas-cancel]").forEach(function (btn) {
@@ -17490,7 +17505,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     w.document.close();
     setTimeout(function () {
       try { w.focus(); w.print(); } catch (e) {}
-    }, 350);
+    }, UI_TIMING.printOpenDelayMs);
   }
 
   function saveRaPdfDirect(opts) {
@@ -17649,7 +17664,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
           updateMobileActionBar();
         }
         syncRaPreviewOrientation();
-      }, 200);
+      }, UI_TIMING.resizeDebounceMs);
     });
     window.addEventListener("orientationchange", function () {
       setTimeout(syncRaPreviewOrientation, 80);
