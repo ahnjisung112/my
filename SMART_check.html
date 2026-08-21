@@ -12156,6 +12156,11 @@ body.ra-mockup .mobile-chevron {
   padding-bottom: 92px;
 }
 /* 결과 요약 화면: 위험도 분포를 한눈에 보여주는 막대 + 상/중/하 카드 */
+/* PC 폭에서 .mobile-form-card 공통 규칙(2열 그리드)이 이 박스에도 적용되어
+   "머리글/막대"가 한 줄로 붙고 카드가 다음 줄로 밀리던 것을 되돌림 */
+body.ra-mockup .mobile-form-card.mobile-risk-dist {
+  display: block;
+}
 .mobile-risk-dist-head {
   display: flex; align-items: baseline; justify-content: space-between;
   font-size: 13px; font-weight: 700; color: var(--smart-text); margin-bottom: 10px;
@@ -12166,6 +12171,23 @@ body.ra-mockup .mobile-chevron {
   background: var(--smart-line);
 }
 .mobile-risk-dist-bar > span { display: block; height: 100%; }
+
+/* 구성내용 검토: 항목별 구분선을 "제목 아래"가 아니라 "안전대책까지 포함한
+   항목 전체 아래"로 옮겨서, 다음 항목과의 경계가 분명히 보이도록 함 */
+.mobile-pv-item {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--smart-line);
+}
+.mobile-pv-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.mobile-pv-item .mobile-mini-row {
+  border-bottom: none;
+  padding-top: 0;
+}
 
 /* 위험성평가 워크스페이스: 선택 공종 목록 + 상세 (마스터-디테일).
    모바일 기본값은 세로 배치 + 가로 스크롤 공종 칩, 901px 이상에서 좌/우 2단으로 전환 */
@@ -16144,12 +16166,14 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         var scoreTxt = (r.frequency && r.intensity)
           ? esc(String(r.frequency)) + "×" + esc(String(r.intensity)) + "=" + esc(String(Number(r.frequency) * Number(r.intensity)))
           : "";
-        html += '<div class="mobile-mini-row"><span class="mobile-mini-name"><b>' + esc(it ? it.item_name : id) + "</b></span>" +
+        html += '<div class="mobile-pv-item">' +
+          '<div class="mobile-mini-row"><span class="mobile-mini-name"><b>' + esc(it ? it.item_name : id) + "</b></span>" +
           '<span class="mobile-mini-meta">' +
           (scoreTxt ? '<span class="mobile-fi">' + scoreTxt + "</span>" : "") +
           levelMarkHtml(lv) +
           "</span></div>" +
-          '<ol class="smart-measure-list">' + measures.slice(0, 4).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ol>";
+          '<ol class="smart-measure-list">' + measures.slice(0, 4).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ol>" +
+          "</div>";
       });
       html += "</div>";
     });
