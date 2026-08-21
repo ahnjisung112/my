@@ -160,6 +160,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-SCAF",
                 "sub_name": "가설공사",
                 "status": "ready",
+                "icon": "icoScaffold",
                 "item_ids": [
                   "RA-HYDRO-FALL-001",
                   "RA-HYDRO-FALL-002",
@@ -212,6 +213,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-ELEC",
                 "sub_name": "감전",
                 "status": "ready",
+                "icon": "icoElectric",
                 "item_ids": [
                   "RA-HYDRO-ELEC-001",
                   "RA-HYDRO-ELEC-002",
@@ -226,6 +228,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-HEAVY",
                 "sub_name": "중장비",
                 "status": "ready",
+                "icon": "icoHeavy",
                 "item_ids": [
                   "RA-HYDRO-LIFT-002",
                   "RA-HYDRO-LIFT-003",
@@ -239,6 +242,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-HLTH",
                 "sub_name": "보건",
                 "status": "ready",
+                "icon": "icoHealth",
                 "item_ids": [
                   "RA-HYDRO-FALL-020",
                   "RA-HYDRO-HLTH-001",
@@ -257,6 +261,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-WELD",
                 "sub_name": "화기·용접",
                 "status": "ready",
+                "icon": "icoWeld",
                 "item_ids": [
                   "RA-HYDRO-FIRE-002",
                   "RA-HYDRO-FIRE-003",
@@ -270,6 +275,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-TRIP",
                 "sub_name": "추락·전도",
                 "status": "ready",
+                "icon": "icoFall",
                 "item_ids": [
                   "RA-HYDRO-FALL-023",
                   "RA-HYDRO-FALL-039",
@@ -281,6 +287,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-LIFT2",
                 "sub_name": "양중·중량물",
                 "status": "ready",
+                "icon": "icoCrane",
                 "item_ids": [
                   "RA-HYDRO-LIFT-007",
                   "RA-HYDRO-LIFT-011",
@@ -295,6 +302,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-CONF",
                 "sub_name": "밀폐",
                 "status": "ready",
+                "icon": "icoConfined",
                 "item_ids": [
                   "RA-HYDRO-CONF-002"
                 ]
@@ -303,6 +311,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-UW",
                 "sub_name": "잠수",
                 "status": "ready",
+                "icon": "icoDive",
                 "item_ids": [
                   "RA-HYDRO-ETC-009",
                   "RA-HYDRO-ETC-010",
@@ -313,6 +322,7 @@ window.SMART_TREE = {
                 "sub_id": "RA-HYDRO-WT-ETC",
                 "sub_name": "기타",
                 "status": "ready",
+                "icon": "icoEtc",
                 "item_ids": [
                   "RA-HYDRO-ELEC-003",
                   "RA-HYDRO-CONF-001",
@@ -12240,8 +12250,9 @@ body.ra-mockup .mobile-form-card.mobile-risk-dist {
 .pc-detail { flex: 1 1 auto; min-width: 0; }
 .pc-detail-head { margin-bottom: 12px; }
 .pc-detail-title { font-size: 15px; font-weight: 800; color: var(--smart-text); }
+.pc-detail-search { margin-bottom: 10px; }
 
-@media (min-width: 901px) {
+@media (min-width: 701px) {
   .pc-workspace {
     flex-direction: row;
     align-items: flex-start;
@@ -15636,7 +15647,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       var preview = (s.item_ids || []).slice(0, 2).map(function (id) {
         return ITEM_MAP[id] ? ITEM_MAP[id].item_name : "";
       }).filter(Boolean).join(" · ");
-      var ico = processIconKey(s.sub_name);
+      var ico = s.icon || processIconKey(s.sub_name);
       var label = processDisplayName(s.sub_name);
       html += '<div class="mobile-process-card' + (active ? " mobile-process-card-selected" : "") +
         '" data-process-sub="' + esc(s.sub_id) + '">' +
@@ -15863,7 +15874,10 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     html += '<h1 class="mobile-screen-title">위험성 평가</h1>';
     html += '<p class="mobile-screen-sub">공종을 선택해 빈도×강도를 산정하세요</p>';
     html += '<div class="mobile-progress"><div class="mobile-progress-label">산정 완료 ' + doneAll + ' / ' + totalAll + '</div>' +
-      '<div class="mobile-progress-bar"><span style="width:' + pct + '%"></span></div></div>';
+      '<div class="mobile-progress-bar"><span style="width:' + pct + '%"></span></div>' +
+      (totalAll && doneAll < totalAll
+        ? '<button type="button" class="mobile-btn-secondary" id="ra-next-unset">다음 미산정 항목</button>'
+        : "") + "</div>";
 
     html += '<div class="pc-workspace">';
 
@@ -15875,7 +15889,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         if (calcRiskLevel(r.frequency, r.intensity)) pdone++;
       });
       var active = p.subId === state.raFocusSub;
-      var ico = processIconKey(p.name);
+      var ico = p.icon || processIconKey(p.name);
       html += '<button type="button" class="pc-proc-row' + (active ? " is-active" : "") + '" data-pc-focus-proc="' + esc(p.subId) + '">' +
         '<span class="pc-proc-ico">' + processPictogram(ico) + '</span>' +
         '<span class="pc-proc-body"><span class="pc-proc-name">' + esc(p.name) + '</span>' +
@@ -15886,9 +15900,19 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
 
     html += '<div class="pc-detail">';
     if (focusProc) {
+      var q = (state.raItemSearchQ || "").trim();
       var ids = focusProc.itemIds;
+      if (q) {
+        ids = ids.filter(function (id) {
+          var it = ITEM_MAP[id];
+          return it && (it.item_name || "").indexOf(q) >= 0;
+        });
+      }
       html += '<div class="pc-detail-head"><span class="pc-detail-title">' + esc(focusProc.name) +
-        ' · 위험요인 ' + ids.length + '건</span></div>';
+        ' · 위험요인 ' + ids.length + (q ? "건 (검색됨)" : "건") + '</span></div>';
+      html += '<div class="pc-detail-search">' +
+        '<input type="search" id="ra-item-search" class="smart-search" placeholder="위험요인 검색" value="' + esc(state.raItemSearchQ || "") + '"></div>';
+      if (!ids.length) html += '<div class="smart-empty">검색 결과가 없습니다</div>';
       html += '<div class="mobile-risk-accordion">';
       ids.forEach(function (id, i) {
         var it = ITEM_MAP[id];
@@ -16725,12 +16749,39 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       nextUnset.addEventListener("click", function () {
         var unset = raUnsetRiskIds();
         if (!unset.length) { toast("모든 항목이 산정되었습니다."); return; }
-        state.raExpandedRisk = unset[0];
+        var targetId = unset[0];
+        /* 워크스페이스는 포커스한 공종의 항목만 렌더링하므로,
+           미산정 항목이 다른 공종에 있으면 포커스부터 옮긴다 */
+        var owner = getRaSelectedProcs().filter(function (p) { return p.itemIds.indexOf(targetId) >= 0; })[0];
+        if (owner && state.raFocusSub !== owner.subId) state.raFocusSub = owner.subId;
+        state.raItemSearchQ = "";
+        state.raExpandedRisk = targetId;
         render();
         setTimeout(function () {
-          var el = main.querySelector('[data-item="' + unset[0] + '"]');
+          var el = main.querySelector('[data-item="' + targetId + '"]');
           if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
         }, 50);
+      });
+    }
+    var itemSearch = main.querySelector("#ra-item-search");
+    if (itemSearch) {
+      itemSearch.addEventListener("compositionstart", function () { state.raComposing = true; });
+      itemSearch.addEventListener("compositionend", function () {
+        state.raComposing = false;
+        state.raItemSearchQ = itemSearch.value;
+        render();
+        var el = main.querySelector("#ra-item-search");
+        if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} }
+      });
+      itemSearch.addEventListener("input", function () {
+        if (state.raComposing) return;
+        state.raItemSearchQ = itemSearch.value;
+        if (state._raItemSearchTimer) clearTimeout(state._raItemSearchTimer);
+        state._raItemSearchTimer = setTimeout(function () {
+          render();
+          var el = main.querySelector("#ra-item-search");
+          if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} }
+        }, 200);
       });
     }
     main.querySelectorAll("[data-meas-cancel]").forEach(function (btn) {
@@ -17302,7 +17353,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       list.push({
         subId: subId,
         name: processDisplayName(sub.sub_name),
-        icon: "",
+        icon: sub.icon || processIconKey(sub.sub_name),
         itemIds: filterItemIdsBySubWork(subId, sub.item_ids || [])
       });
     });
