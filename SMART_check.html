@@ -12171,17 +12171,17 @@ body.ra-mockup .mobile-chevron {
 }
 .pc-proc-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 10px;
+  gap: 12px;
   flex: 0 0 auto;
-  width: 200px;
-  padding: 18px 14px;
+  width: auto;
+  min-width: 168px;
+  padding: 12px 14px;
   background: var(--smart-surface);
   border: 1px solid var(--smart-line);
   border-radius: var(--smart-radius-md);
   font-family: inherit;
+  text-align: left;
   cursor: pointer;
 }
 .pc-proc-row.is-active {
@@ -12190,9 +12190,9 @@ body.ra-mockup .mobile-chevron {
 }
 .pc-proc-ico { flex: 0 0 auto; width: 152px; height: 152px; display: flex; align-items: center; justify-content: center; }
 .pc-proc-ico .process-png { width: 152px; height: 152px; }
-.pc-proc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.pc-proc-name { font-size: 15px; font-weight: 700; color: var(--smart-text); white-space: normal; }
-.pc-proc-sub { font-size: 12px; color: var(--smart-text-sub); white-space: nowrap; }
+.pc-proc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pc-proc-name { font-size: 14px; font-weight: 700; color: var(--smart-text); white-space: nowrap; }
+.pc-proc-sub { font-size: 11.5px; color: var(--smart-text-sub); white-space: nowrap; }
 .pc-proc-count {
   flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--smart-text-sub);
   background: var(--smart-bg); padding: 3px 10px; border-radius: 999px;
@@ -12219,7 +12219,7 @@ body.ra-mockup .mobile-chevron {
   .pc-proc-row {
     width: 100%;
     min-width: 0;
-    padding: 20px;
+    padding: 16px;
   }
   .pc-proc-ico { width: 192px; height: 192px; }
   .pc-proc-ico .process-png { width: 192px; height: 192px; }
