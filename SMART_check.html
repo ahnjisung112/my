@@ -10192,10 +10192,12 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     cursor: pointer;
   }
 
+  /* 빈도·강도 칩의 "선택됨" 표시는 위험도 배지(상=빨강/중=주황/하=초록)와
+     의미가 겹치지 않도록 초록 대신 중립 파랑을 사용 */
   .mobile-freq-chip.is-selected,
   .mobile-freq-chip.is-on {
-    background: var(--smart-green-600);
-    border-color: var(--smart-green-600);
+    background: var(--smart-blue-700);
+    border-color: var(--smart-blue-700);
     color: #fff;
     font-weight: 700;
   }
@@ -10487,8 +10489,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
   .mobile-freq-chip .chip-n { font-size: 14px; font-weight: 800; color: var(--smart-text); }
   .mobile-freq-chip .chip-lbl { font-size: 9px; color: var(--smart-text-sub); font-weight: 600; }
   .mobile-freq-chip.is-on {
-    background: var(--smart-green-600) !important;
-    border-color: var(--smart-green-600) !important;
+    background: var(--smart-blue-700) !important;
+    border-color: var(--smart-blue-700) !important;
   }
   .mobile-freq-chip.is-on .chip-n,
   .mobile-freq-chip.is-on .chip-lbl { color: #fff; }
@@ -11415,8 +11417,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
 
   body.ra-mockup .mobile-freq-chip.is-selected,
   body.ra-mockup .mobile-freq-chip.is-on{
-    background: var(--smart-green-600);
-    border-color: var(--smart-green-600);
+    background: var(--smart-blue-700);
+    border-color: var(--smart-blue-700);
     color: #fff;
     font-weight: 700;
   }
@@ -11690,8 +11692,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
   body.ra-mockup .mobile-freq-chip .chip-n{ font-size: 14px; font-weight: 800; color: var(--smart-text); }
   body.ra-mockup .mobile-freq-chip .chip-lbl{ font-size: 9px; color: var(--smart-text-sub); font-weight: 600; }
   body.ra-mockup .mobile-freq-chip.is-on{
-    background: var(--smart-green-600) !important;
-    border-color: var(--smart-green-600) !important;
+    background: var(--smart-blue-700) !important;
+    border-color: var(--smart-blue-700) !important;
   }
   body.ra-mockup .mobile-freq-chip.is-on .chip-n,
   body.ra-mockup .mobile-freq-chip.is-on .chip-lbl{ color: #fff; }
@@ -12064,18 +12066,42 @@ body.ra-mockup .mobile-process-name {
   white-space: normal;
   line-height: 1.25;
 }
+/* 위험요인 카드 헤더: 제목 길이에 따라 "번호+위험도"가 같은 줄에
+   붙거나 다음 줄로 밀리는 등 항목마다 배치가 달라지던 것을,
+   그리드로 "번호|위험도" / "제목|화살표" 2행 배치로 고정 */
+.mobile-risk-header,
+body.ra-mockup .mobile-risk-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "no   .    level"
+    "name name chev";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+.mobile-risk-header .mobile-risk-no,
+body.ra-mockup .mobile-risk-header .mobile-risk-no {
+  grid-area: no;
+}
+.mobile-risk-header .mobile-risk-level-row,
+body.ra-mockup .mobile-risk-header .mobile-risk-level-row {
+  grid-area: level;
+  justify-self: end;
+  margin-left: 0;
+}
 .mobile-risk-name,
 body.ra-mockup .mobile-risk-name {
-  flex: 1 1 auto;
+  grid-area: name;
   min-width: 0;
   word-break: keep-all;
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.mobile-risk-header,
-body.ra-mockup .mobile-risk-header {
-  flex-wrap: wrap;
-  align-items: flex-start;
+.mobile-risk-header .mobile-chevron,
+body.ra-mockup .mobile-risk-header .mobile-chevron {
+  grid-area: chev;
+  justify-self: end;
 }
 .mobile-tag,
 body.ra-mockup .mobile-tag {
@@ -12104,6 +12130,11 @@ body.ra-mockup .mobile-step-label {
 .mobile-chevron,
 body.ra-mockup .mobile-chevron {
   flex-shrink: 0;
+}
+/* 미리보기 하단 고정 액션바(닫기/문서 확정)가 스크롤 마지막 줄과
+   겹쳐 보이던 것을 막기 위해, 액션바가 보일 때만 본문 하단 여백 확보 */
+#ra-preview-body:has(+ .mobile-preview-action-bar:not([hidden])) {
+  padding-bottom: 92px;
 }
 .mobile-action-bar .mobile-btn-primary,
 .mobile-action-bar .mobile-btn-success,
@@ -15929,7 +15960,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<div class="mobile-form-card"><div class="pv-kicker">' + esc(raDocNo()) + "</div>" +
       "<h2>안전관리계획서</h2>" +
       "<p><b>공사명</b> " + esc(insp.project || "") + "</p>" +
-      "<p><b>시공업체</b> " + esc(insp.partner || "") + "</p>" +
+      (insp.partner ? "<p><b>시공업체</b> " + esc(insp.partner) + "</p>" : "") +
       "<p><b>작성</b> " + esc(insp.inspector_name || "") + " · " + esc(insp.inspection_date || "") + "</p></div>";
     html += '<div class="mobile-risk-break">' +
       '<div class="rb high">상 ' + counts.high + "</div>" +
