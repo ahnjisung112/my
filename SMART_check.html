@@ -12153,26 +12153,30 @@ body.ra-mockup .mobile-chevron {
 }
 .mobile-risk-dist-bar > span { display: block; height: 100%; }
 
-/* PC 위험성평가 워크스페이스: 좌측 선택 공종 목록 + 우측 상세 (마스터-디테일) */
+/* 위험성평가 워크스페이스: 선택 공종 목록 + 상세 (마스터-디테일).
+   모바일 기본값은 세로 배치 + 가로 스크롤 공종 칩, 901px 이상에서 좌/우 2단으로 전환 */
 .pc-workspace {
   display: flex;
-  align-items: flex-start;
-  gap: 20px;
+  flex-direction: column;
+  gap: 14px;
 }
 .pc-proc-nav {
-  flex: 0 0 340px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 720px;
-  overflow-y: auto;
+  flex-direction: row;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 .pc-proc-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  width: 100%;
-  padding: 16px;
+  gap: 12px;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 168px;
+  padding: 12px 14px;
   background: var(--smart-surface);
   border: 1px solid var(--smart-line);
   border-radius: var(--smart-radius-md);
@@ -12184,19 +12188,45 @@ body.ra-mockup .mobile-chevron {
   background: var(--smart-blue-050);
   border-color: var(--smart-blue-700);
 }
-.pc-proc-ico { flex: 0 0 auto; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; }
-.pc-proc-ico .process-png { width: 48px; height: 48px; }
+.pc-proc-ico { flex: 0 0 auto; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+.pc-proc-ico .process-png { width: 38px; height: 38px; }
 .pc-proc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.pc-proc-name { font-size: 15.5px; font-weight: 700; color: var(--smart-text); }
-.pc-proc-sub { font-size: 12.5px; color: var(--smart-text-sub); }
+.pc-proc-name { font-size: 14px; font-weight: 700; color: var(--smart-text); white-space: nowrap; }
+.pc-proc-sub { font-size: 11.5px; color: var(--smart-text-sub); white-space: nowrap; }
 .pc-proc-count {
-  flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: var(--smart-text-sub);
-  background: var(--smart-bg); padding: 4px 11px; border-radius: 999px;
+  flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--smart-text-sub);
+  background: var(--smart-bg); padding: 3px 10px; border-radius: 999px;
 }
 .pc-proc-row.is-active .pc-proc-count { background: var(--smart-blue-700); color: #fff; }
 .pc-detail { flex: 1 1 auto; min-width: 0; }
 .pc-detail-head { margin-bottom: 12px; }
 .pc-detail-title { font-size: 15px; font-weight: 800; color: var(--smart-text); }
+
+@media (min-width: 901px) {
+  .pc-workspace {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .pc-proc-nav {
+    flex: 0 0 340px;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 720px;
+    overflow-x: visible;
+    overflow-y: auto;
+  }
+  .pc-proc-row {
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
+  }
+  .pc-proc-ico { width: 48px; height: 48px; }
+  .pc-proc-ico .process-png { width: 48px; height: 48px; }
+  .pc-proc-name { font-size: 15.5px; white-space: normal; }
+  .pc-proc-sub { font-size: 12.5px; white-space: normal; }
+  .pc-proc-count { font-size: 12.5px; padding: 4px 11px; }
+}
 
 .mobile-action-bar .mobile-btn-primary,
 .mobile-action-bar .mobile-btn-success,
@@ -15768,60 +15798,10 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       "</ol></div></div></div>";
     return html;
   }
-  function renderRaMobileStep3() {
-    var ids = getRaSelectedItemIds();
-    /* 대장 기본 빈도·강도를 먼저 반영한 뒤 산정 완료 집계 */
-    ids.forEach(function (id) { ensureRaResultFromLedger(id); });
-    var done = ids.filter(function (id) {
-      var r = state.results[id] || {};
-      return !!calcRiskLevel(r.frequency, r.intensity);
-    }).length;
-    var pct = ids.length ? Math.round(done / ids.length * 100) : 0;
-    var html = '<div class="mobile-screen">' + renderMobileStepper();
-    html += '<h1 class="mobile-screen-title">위험성 평가</h1>';
-    html += '<p class="mobile-screen-sub">빈도×강도로 위험 수준을 산정하세요</p>';
-    html += '<div class="mobile-progress"><div class="mobile-progress-label">산정 완료 ' + done + " / " + ids.length + "</div>" +
-      '<div class="mobile-progress-bar"><span style="width:' + pct + '%"></span></div>' +
-      (ids.length && done < ids.length
-        ? '<button type="button" class="mobile-btn-secondary" id="ra-next-unset">다음 미산정 항목</button>'
-        : "") + "</div>";
-    html += '<div class="mobile-risk-accordion">';
-    ids.forEach(function (id, i) {
-      var it = ITEM_MAP[id];
-      if (!it) return;
-      var r = state.results[id];
-      var lv = raHazardLevel(r);
-      var open = state.raExpandedRisk === id;
-      var scored = !!lv;
-      var scoreTxt = "";
-      if (r.frequency && r.intensity) {
-        scoreTxt = '<span class="mobile-risk-score">' + esc(String(r.frequency)) + "×" +
-          esc(String(r.intensity)) + "=" + esc(String(Number(r.frequency) * Number(r.intensity))) + "</span>";
-      }
-      html += '<div class="mobile-risk-item' + (scored ? " is-scored" : "") + '" data-item="' + esc(id) + '">' +
-        '<button type="button" class="mobile-risk-header" data-ra-expand-risk="' + esc(id) + '">' +
-        '<span class="mobile-risk-no">' + String(i + 1).padStart(2, "0") + "</span>" +
-        '<span class="mobile-risk-name">' + esc(it.item_name) + "</span>" +
-        '<span class="mobile-risk-level-row">' +
-        scoreTxt +
-        (scored ? levelMarkHtml(lv) : '<span class="smart-level-mark lv-none">미산정</span>') +
-        "</span>" +
-        '<span class="mobile-chevron">' + (open ? "˄" : "˅") + "</span></button>";
-      if (open) {
-        html += '<div class="mobile-risk-body">' +
-          '<div class="mobile-field"><label>발생 가능성(빈도)</label>' +
-          scoreChipHtml(id, "frequency", r.frequency || "", false) + "</div>" +
-          '<div class="mobile-field"><label>중대성(강도)</label>' +
-          scoreChipHtml(id, "intensity", r.intensity || "", isLedgerIntensityLocked(it)) + "</div></div>";
-      }
-      html += "</div>";
-    });
-    html += "</div></div>";
-    return html;
-  }
-  /* PC 전용: 좌측 선택 공종 목록 + 우측 위험요인 상세(마스터-디테일).
+  /* 3단계(위험성평가) 전용: 선택 공종 목록 + 위험요인 상세(마스터-디테일).
+     모바일·PC 모두 이 함수를 쓰며 폭에 따라 CSS로 세로/2단 배치만 바뀐다.
      공종 추가/제거는 여전히 공종선택(2단계)에서만 — 여기서는 조회·포커스만 한다. */
-  function renderRaDesktopStep3() {
+  function renderRaWorkspaceStep3() {
     var procs = getRaSelectedProcs();
     if (!state.raFocusSub || !procs.some(function (p) { return p.subId === state.raFocusSub; })) {
       state.raFocusSub = procs.length ? procs[0].subId : null;
@@ -16039,7 +16019,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     markRaVisited(step);
     if (step === 1) return renderRaMobileStep1();
     if (step === 2) return renderRaMobileStep2();
-    if (step === 3) return renderRaMobileStep3();
+    /* 3단계는 renderRaInput()에서 renderRaWorkspaceStep3()로 먼저 분기되어 여기 도달하지 않음 */
     return renderRaMobileStep4();
   }
   function updateMobileActionBar() {
@@ -16383,8 +16363,8 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     if (step > 4) step = 4;
     state.raStep = step;
     markRaVisited(step);
-    /* 3단계(위험성평가)는 PC 폭에서 공종목록+상세 마스터-디테일 레이아웃 사용 */
-    if (step === 3 && !isPhonePreview()) return renderRaDesktopStep3();
+    /* 3단계(위험성평가)는 폭에 관계없이 공종목록+상세 마스터-디테일 레이아웃 사용 */
+    if (step === 3) return renderRaWorkspaceStep3();
     /* 그 외 단계는 PC·모바일 공통 시안 UI */
     return renderRaMobileInput();
   }
