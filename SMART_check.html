@@ -12095,6 +12095,20 @@ body.ra-mockup .mobile-risk-header .mobile-risk-level-row {
   justify-self: end;
   margin-left: 0;
 }
+/* 결과 요약의 공종 아코디언 헤더: 건수/상중하 칩이 위, 공종명+화살표가 아래 */
+.mobile-risk-header-proc,
+body.ra-mockup .mobile-risk-header-proc {
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name chev"
+    "tags tags";
+}
+.mobile-risk-header-proc .mobile-count-group,
+body.ra-mockup .mobile-risk-header-proc .mobile-count-group {
+  grid-area: tags;
+  margin-left: 0;
+  justify-content: flex-start;
+}
 .mobile-risk-name,
 body.ra-mockup .mobile-risk-name {
   grid-area: name;
@@ -15987,7 +16001,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       var open = state.raExpandedRisk === ("proc:" + proc.subId);
       var tag = raProcCountTag(proc.itemIds);
       html += '<div class="mobile-risk-item">' +
-        '<button type="button" class="mobile-risk-header" data-ra-expand-risk="' + esc("proc:" + proc.subId) + '">' +
+        '<button type="button" class="mobile-risk-header mobile-risk-header-proc" data-ra-expand-risk="' + esc("proc:" + proc.subId) + '">' +
         '<span class="mobile-risk-name">' + esc(proc.name) + "</span>" +
         tag.html +
         '<span class="mobile-chevron">' + (open ? "˄" : "˅") + "</span></button>";
@@ -16116,7 +16130,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       "<p><b>공사명</b> " + esc(insp.project || "") + "</p>" +
       (insp.partner ? "<p><b>시공업체</b> " + esc(insp.partner) + "</p>" : "") +
       "<p><b>작성</b> " + esc(insp.inspector_name || "") + " · " + esc(insp.inspection_date || "") + "</p></div>";
-    html += '<div class="mobile-risk-break">' +
+    html += '<div class="mobile-risk-break mobile-risk-break-3">' +
       '<div class="rb high">상 ' + counts.high + "</div>" +
       '<div class="rb mid">중 ' + counts.mid + "</div>" +
       '<div class="rb low">하 ' + counts.low + "</div></div>";
@@ -16127,7 +16141,14 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         var r = state.results[id] || {};
         var lv = raHazardLevel(r);
         var measures = raMeasuresList(it, r);
-        html += '<div class="mobile-mini-row"><b>' + esc(it ? it.item_name : id) + "</b>" + levelMarkHtml(lv) + "</div>" +
+        var scoreTxt = (r.frequency && r.intensity)
+          ? esc(String(r.frequency)) + "×" + esc(String(r.intensity)) + "=" + esc(String(Number(r.frequency) * Number(r.intensity)))
+          : "";
+        html += '<div class="mobile-mini-row"><span class="mobile-mini-name"><b>' + esc(it ? it.item_name : id) + "</b></span>" +
+          '<span class="mobile-mini-meta">' +
+          (scoreTxt ? '<span class="mobile-fi">' + scoreTxt + "</span>" : "") +
+          levelMarkHtml(lv) +
+          "</span></div>" +
           '<ol class="smart-measure-list">' + measures.slice(0, 4).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("") + "</ol>";
       });
       html += "</div>";
