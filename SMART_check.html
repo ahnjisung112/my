@@ -15570,12 +15570,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     requestAnimationFrame(function () {
       try { window.scrollTo({ top: 0, behavior: "smooth" }); }
       catch (e2) { window.scrollTo(0, 0); }
-      var target = document.querySelector(".mobile-screen-title") ||
-        document.querySelector(".smart-document-head") ||
-        document.getElementById("app-main");
-      if (target && target.scrollIntoView) {
-        try { target.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e3) {}
-      }
     });
   }
   function setupBanners() {
