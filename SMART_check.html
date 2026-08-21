@@ -12188,10 +12188,13 @@ body.ra-mockup .mobile-chevron {
   background: var(--smart-blue-050);
   border-color: var(--smart-blue-700);
 }
-.pc-proc-ico { flex: 0 0 auto; width: 152px; height: 152px; display: flex; align-items: center; justify-content: center; }
-.pc-proc-ico .process-png { width: 152px; height: 152px; }
+.pc-proc-ico { flex: 0 0 auto; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; }
+.pc-proc-ico .process-png { width: 72px; height: 72px; }
 .pc-proc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.pc-proc-name { font-size: 14px; font-weight: 700; color: var(--smart-text); white-space: nowrap; }
+.pc-proc-name {
+  font-size: 14px; font-weight: 700; color: var(--smart-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .pc-proc-sub { font-size: 11.5px; color: var(--smart-text-sub); white-space: nowrap; }
 .pc-proc-count {
   flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--smart-text-sub);
@@ -12221,10 +12224,10 @@ body.ra-mockup .mobile-chevron {
     min-width: 0;
     padding: 16px;
   }
-  .pc-proc-ico { width: 192px; height: 192px; }
-  .pc-proc-ico .process-png { width: 192px; height: 192px; }
-  .pc-proc-name { font-size: 15.5px; white-space: normal; }
-  .pc-proc-sub { font-size: 12.5px; white-space: normal; }
+  .pc-proc-ico { width: 80px; height: 80px; }
+  .pc-proc-ico .process-png { width: 80px; height: 80px; }
+  .pc-proc-name { font-size: 15.5px; }
+  .pc-proc-sub { font-size: 12.5px; white-space: nowrap; }
   .pc-proc-count { font-size: 12.5px; padding: 4px 11px; }
 }
 
