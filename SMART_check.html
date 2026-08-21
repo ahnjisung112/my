@@ -13672,6 +13672,16 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     return generateScPdf(itemIds);
   }
 
+  /* PDF 브랜드 색상 — CSS :root의 --smart-blue-900/700/100/050 등과 동일한 값.
+     jsPDF는 CSS 변수를 읽을 수 없어 RGB 배열로 한 번만 선언해 공유한다 */
+  var SMART_PDF_RGB = {
+    navy: [7, 58, 130],        /* --smart-blue-900 #073A82 */
+    accent: [11, 93, 204],     /* --smart-blue-700 #0B5DCC */
+    beige: [244, 247, 251],    /* --smart-bg #F4F7FB */
+    labelBg: [234, 243, 255],  /* --smart-blue-100 #EAF3FF */
+    lineC: [174, 191, 209],    /* --smart-line-dark #AEBFD1 */
+    softLine: [216, 226, 238]  /* --smart-line #D8E2EE */
+  };
   function generateRaPdf(itemIds) {
     /* 구성내용 검토(buildRaPreviewHTML)와 동일한 양식으로 PDF 생성 */
     var jsPDF = getJsPDF();
@@ -13687,13 +13697,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var pageW = 297, pageH = 210;
     var ml = 12, mr = 12, pw = pageW - ml - mr;
     var y = 12;
-    /* 구성내용 검토 CSS 변수와 동일: --smart-ink / copper / paper / line */
-    var navy = [7, 58, 130];          /* #073A82 */
-    var accent = [11, 93, 204];       /* #0B5DCC */
-    var beige = [244, 247, 251];      /* #F4F7FB */
-    var labelBg = [234, 243, 255];    /* #EAF3FF */
-    var lineC = [174, 191, 209];      /* #AEBFD1 */
-    var softLine = [216, 226, 238];   /* #D8E2EE */
+    var navy = SMART_PDF_RGB.navy;
+    var accent = SMART_PDF_RGB.accent;
+    var beige = SMART_PDF_RGB.beige;
+    var labelBg = SMART_PDF_RGB.labelBg;
+    var lineC = SMART_PDF_RGB.lineC;
+    var softLine = SMART_PDF_RGB.softLine;
 
     /* —— 배너 (구성내용 검토와 동일 정보) —— */
     doc.setDrawColor(navy[0], navy[1], navy[2]);
