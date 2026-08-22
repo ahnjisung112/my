@@ -7356,6 +7356,9 @@ window.SMART_ITEMS = [
   --smart-surface: #FFFFFF;
   --smart-line: #D8E2EE;
   --smart-line-dark: #AEBFD1;
+  /* 앱 전체 드롭다운(select)의 통일된 표시 화살표 — 브라우저마다 다른
+     네이티브 화살표 대신 이 아이콘 하나로 통일 */
+  --smart-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B5DCC' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   /* "미산정/해당없음" 등 무채색 배지 배경 — 기존에 #EEF2F7/#f1f5f9/#f8fafc로
      제각각 흩어져 있던 근백색 회색을 하나로 통일 */
   --smart-neutral-soft: #EEF2F7;
@@ -7424,7 +7427,7 @@ body {
 }
 body.no-bottom-pad { padding-bottom: var(--safe-b); }
 
-/* 다크모드 / 고대비 — 글자·카드 대비 확보 */
+/* 다크모드 — 글자·카드 대비 확보 */
 body.dark-mode {
   --bg: #10151e;
   --card: #252f3f;
@@ -7459,225 +7462,45 @@ body.dark-mode {
   --smart-safe-soft: var(--good-soft);
   --smart-blue-050: var(--navy-soft);
 }
-body.high-contrast {
-  --bg: #000000;
-  --card: #111111;
-  --text: #ffffff;
-  --text-sub: #ffffff;
-  --line: #ffffff;
-  --navy: #ffffff;
-  --good: #3DFF9A;
-  --bad: #FF6B5C;
-  --na: #E0E0E0;
-  --unjudged: #FFD54A;
-  --good-soft: #002211;
-  --good-soft-deep: #00331a;
-  --bad-soft: #2a0000;
-  --bad-soft-deep: #3d0000;
-  --na-soft: #222;
-  --na-soft-deep: #333;
-  --navy-soft: #001a4d;
-  color-scheme: dark;
-}
+
 
 /* 헤더는 blue-900 유지(다크모드에서도) */
-body.dark-mode #app-header,
-body.high-contrast #app-header {
-  background: var(--smart-blue-900);
-  color: #fff;
-}
-body.dark-mode .hdr-version,
-body.high-contrast .hdr-version {
-  color: #fff;
-  opacity: 1;
-}
 
-body.dark-mode .nav-card,
-body.high-contrast .nav-card {
-  background: var(--card);
-  border-color: var(--line);
-  color: var(--text);
-}
-body.dark-mode .nav-card-title,
-body.high-contrast .nav-card-title {
-  color: #ffffff;
-}
-body.dark-mode .nav-card-desc,
-body.dark-mode .nav-card-progress,
-body.high-contrast .nav-card-desc,
-body.high-contrast .nav-card-progress {
-  color: #d0d8e4;
-}
-body.dark-mode .nav-card-progress b,
-body.high-contrast .nav-card-progress b {
-  color: #e8f0ff;
-}
+
+
+
+
+
+
 /* 준비 중 카드: opacity로 흐려지지 않게 */
-body.dark-mode .nav-card.disabled,
-body.high-contrast .nav-card.disabled {
-  opacity: 1;
-  background: #1a2230;
-  border-color: #4a5568;
-}
-body.dark-mode .nav-card.disabled .nav-card-title,
-body.high-contrast .nav-card.disabled .nav-card-title {
-  color: #e2e8f0;
-}
-body.dark-mode .nav-card.disabled .nav-card-progress,
-body.dark-mode .nav-card.disabled .nav-card-desc,
-body.high-contrast .nav-card.disabled .nav-card-progress,
-body.high-contrast .nav-card.disabled .nav-card-desc {
-  color: #b8c2d0;
-}
-body.dark-mode .badge-preparing,
-body.high-contrast .badge-preparing {
-  background: #4a5568;
-  color: var(--bg);
-  border: 1px solid #94a3b8;
-}
 
-body.dark-mode .btn-back,
-body.dark-mode .btn-link,
-body.dark-mode .subnav-btn,
-body.dark-mode .report-title,
-body.dark-mode .modal-title,
-body.dark-mode .search-result .sr-name,
-body.dark-mode .history-item .hi-date,
-body.dark-mode .btn-outline,
-body.dark-mode .bottom-btn:not(.bottom-btn-primary),
-body.high-contrast .btn-back,
-body.high-contrast .btn-link,
-body.high-contrast .subnav-btn,
-body.high-contrast .report-title,
-body.high-contrast .modal-title,
-body.high-contrast .search-result .sr-name,
-body.high-contrast .history-item .hi-date,
-body.high-contrast .btn-outline,
-body.high-contrast .bottom-btn:not(.bottom-btn-primary) {
-  color: #e2ecff;
-}
-body.dark-mode .btn-outline,
-body.dark-mode .bottom-btn:not(.bottom-btn-primary),
-body.dark-mode .subnav-btn,
-body.dark-mode .nav-search-input,
-body.high-contrast .btn-outline,
-body.high-contrast .bottom-btn:not(.bottom-btn-primary),
-body.high-contrast .subnav-btn,
-body.high-contrast .nav-search-input {
-  border-color: #8eb4e8;
-  background: var(--card);
-  color: #f0f4fa;
-}
-body.dark-mode .nav-search-input::placeholder,
-body.high-contrast .nav-search-input::placeholder {
-  color: #9aa8bc;
-}
-body.dark-mode .judge-btn,
-body.high-contrast .judge-btn {
-  background: #334155;
-  color: #f8fafc;
-  border-color: #64748b;
-}
-body.dark-mode .judge-btn.sel-good,
-body.high-contrast .judge-btn.sel-good {
-  background: var(--good);
-  color: #fff;
-  border-color: var(--good);
-}
-body.dark-mode .judge-btn.sel-bad,
-body.high-contrast .judge-btn.sel-bad {
-  background: var(--bad);
-  color: #fff;
-  border-color: var(--bad);
-}
-body.dark-mode .judge-btn.sel-na,
-body.high-contrast .judge-btn.sel-na {
-  background: #9ca3af;
-  color: #111;
-  border-color: #9ca3af;
-}
-body.dark-mode .basis-box,
-body.high-contrast .basis-box {
-  background: rgba(255,255,255,0.1);
-  color: #dde4ee;
-}
-body.dark-mode .basis-box .basis-label,
-body.high-contrast .basis-box .basis-label {
-  color: #fff;
-}
-body.dark-mode .item-name,
-body.high-contrast .item-name,
-body.dark-mode .item-card,
-body.high-contrast .item-card,
-body.dark-mode .form-group label,
-body.high-contrast .form-group label,
-body.dark-mode .report-meta,
-body.high-contrast .report-meta,
-body.dark-mode .toggle-filter,
-body.high-contrast .toggle-filter {
-  color: var(--text);
-}
-body.dark-mode .modal-box,
-body.high-contrast .modal-box {
-  background: var(--card);
-  color: var(--text);
-}
-body.dark-mode .modal-box input,
-body.dark-mode .modal-box select,
-body.dark-mode .modal-box textarea,
-body.high-contrast .modal-box input,
-body.high-contrast .modal-box select,
-body.high-contrast .modal-box textarea,
-body.dark-mode .action-block input,
-body.dark-mode .action-block select,
-body.dark-mode .action-block textarea,
-body.high-contrast .action-block input,
-body.high-contrast .action-block select,
-body.high-contrast .action-block textarea {
-  background: #0f141c;
-  color: #fff;
-  border-color: var(--line);
-}
-body.dark-mode .btn-plain,
-body.high-contrast .btn-plain { color: #c5d0de; }
-body.dark-mode .summary-lbl,
-body.high-contrast .summary-lbl { color: #c5d0de; }
-body.dark-mode .summary-bar,
-body.high-contrast .summary-bar {
-  background: var(--card);
-  border-color: var(--line);
-}
-body.dark-mode .checklist-sticky-head,
-body.high-contrast .checklist-sticky-head { background: var(--bg); }
-body.dark-mode #btn-dark,
-body.high-contrast #btn-dark { background: rgba(255,255,255,0.28); }
-body.dark-mode .nav-path-bar,
-body.high-contrast .nav-path-bar {
-  background: #3a5080;
-  color: #fff;
-}
-body.dark-mode .nav-search-empty,
-body.high-contrast .nav-search-empty { color: #c5d0de; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* 버튼·번호배지 등 솔리드 네이비는 진한 색 유지 */
-body.dark-mode .bottom-btn-primary,
-body.dark-mode .btn-primary,
-body.dark-mode .item-num,
-body.dark-mode .report-table th,
-body.high-contrast .bottom-btn-primary,
-body.high-contrast .btn-primary,
-body.high-contrast .item-num,
-body.high-contrast .report-table th {
-  background: var(--smart-blue-700) !important;
-  border-color: var(--smart-blue-700) !important;
-  color: #fff !important;
-}
-body.dark-mode .bottom-btn:not(.bottom-btn-primary),
-body.high-contrast .bottom-btn:not(.bottom-btn-primary) {
-  border-color: #8eb4e8;
-  color: #e8f0ff;
-  background: #252f3f;
-}
+
+
 
 .hidden { display: none !important; }
 
@@ -8287,6 +8110,15 @@ body.ra-ux .subnav-bar {
   border-radius: 2px;
   font-size: 14px;
   font-family: inherit;
+}
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--smart-select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  padding-right: 32px;
 }
 .form-group .req { color: var(--bad); }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
@@ -8954,6 +8786,15 @@ body.ra-ux .subnav-bar {
   border-color: var(--smart-blue-700);
   box-shadow: 0 0 0 2px rgba(11, 93, 204, 0.15);
 }
+select.risk-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--smart-select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  padding-right: 30px;
+}
 .smart-span-2 { grid-column: 1 / -1; }
 
 /* Process sheets */
@@ -9462,25 +9303,10 @@ body.ra-ux .subnav-bar {
 .risk-badge.risk-하 { background: transparent; color: var(--smart-safe); border-color: var(--smart-safe); }
 .risk-badge.risk-none { background: transparent; color: var(--smart-muted); border-color: var(--smart-line-dark); }
 
-body.dark-mode.ra-ux .smart-shell,
-body.high-contrast.ra-ux .smart-shell {
-  background: var(--card);
-  border-color: var(--line);
-}
-body.dark-mode .smart-document-sheet,
-body.high-contrast .smart-document-sheet {
-  border-color: var(--line);
-  background: var(--card);
-}
-body.dark-mode .smart-step-item.is-current,
-body.high-contrast .smart-step-item.is-current {
-  background: rgba(11, 93, 204, 0.12);
-}
-body.dark-mode #ra-preview-body,
-body.high-contrast #ra-preview-body {
-  background: #fff;
-  color: #111;
-}
+
+
+
+
 
 body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
 
@@ -10616,6 +10442,12 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1; border: none !important; box-shadow: none !important;
     min-height: 46px; padding: 8px 0 !important; background: transparent !important;
   }
+  .mobile-field-row select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent var(--smart-select-chevron) no-repeat right 2px center / 14px 14px !important;
+    padding-right: 22px !important;
+  }
   .mobile-gongsa-row {
     gap: 6px;
     padding-right: 8px;
@@ -10624,7 +10456,7 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1 1 auto;
     min-width: 0;
   }
-  .mobile-gongsa-pick {
+  select.mobile-gongsa-pick {
     flex: 0 0 44px !important;
     width: 44px !important;
     min-width: 44px !important;
@@ -10633,8 +10465,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     padding: 0 !important;
     border: 1px solid var(--smart-line) !important;
     border-radius: 8px !important;
-    background: var(--smart-blue-050, #eef5ff) !important;
-    color: var(--smart-blue-800) !important;
+    background: var(--smart-blue-050, #eef5ff) var(--smart-select-chevron) no-repeat center / 16px 16px !important;
+    color: transparent !important;
     font-size: 14px;
     font-weight: 700;
     text-align: center;
@@ -10642,6 +10474,7 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     appearance: none;
     -webkit-appearance: none;
   }
+  .mobile-gongsa-pick option { color: var(--smart-text); }
   .mobile-gongsa-add {
     flex: 0 0 44px;
     align-self: center;
@@ -11818,6 +11651,12 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1; border: none !important; box-shadow: none !important;
     min-height: 46px; padding: 8px 0 !important; background: transparent !important;
   }
+  body.ra-mockup .mobile-field-row select{
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent var(--smart-select-chevron) no-repeat right 2px center / 14px 14px !important;
+    padding-right: 22px !important;
+  }
   body.ra-mockup .mobile-gongsa-row{
     gap: 6px;
     padding-right: 8px;
@@ -11826,7 +11665,7 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1 1 auto;
     min-width: 0;
   }
-  body.ra-mockup .mobile-gongsa-pick{
+  body.ra-mockup select.mobile-gongsa-pick{
     flex: 0 0 44px !important;
     width: 44px !important;
     min-width: 44px !important;
@@ -11835,8 +11674,8 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     padding: 0 !important;
     border: 1px solid var(--smart-line) !important;
     border-radius: 8px !important;
-    background: var(--smart-blue-050, #eef5ff) !important;
-    color: var(--smart-blue-800) !important;
+    background: var(--smart-blue-050, #eef5ff) var(--smart-select-chevron) no-repeat center / 16px 16px !important;
+    color: transparent !important;
     font-size: 14px;
     font-weight: 700;
     text-align: center;
@@ -11844,6 +11683,7 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     appearance: none;
     -webkit-appearance: none;
   }
+  body.ra-mockup .mobile-gongsa-pick option{ color: var(--smart-text); }
   body.ra-mockup .mobile-gongsa-add{
     flex: 0 0 44px;
     align-self: center;
@@ -12838,7 +12678,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   var K_INSPECTOR = "smart_v7_inspector";
   var K_HISTORY = "smart_v7_history";
   var K_NAV = "smart_v7_nav";
-  var K_HC = "smart_v7_hc";
   var K_DARK = "smart_v7_dark";
   var K_SITES = "smart_v7_sites";
   var K_PARTNERS = "smart_v7_partners";
@@ -13200,7 +13039,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       storeGet(K_INSPECTOR),
       storeGet(K_HISTORY),
       storeGet(K_NAV),
-      storeGet(K_HC),
       storeGet(K_DARK),
       storeGet(K_SITES),
       storeGet(K_PARTNERS)
@@ -13240,11 +13078,10 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
           if (!state.groupIds.length && arr[4].groupId) state.groupIds = [arr[4].groupId];
         }
       }
-      if (arr[5]) document.body.classList.toggle("high-contrast", !!arr[5]);
-      if (arr[6]) document.body.classList.toggle("dark-mode", !!arr[6]);
+      if (arr[5]) document.body.classList.toggle("dark-mode", !!arr[5]);
       window._history = arr[3] || [];
-      state.customSites = Array.isArray(arr[7]) ? arr[7] : [];
-      state.customPartners = Array.isArray(arr[8]) ? arr[8] : [];
+      state.customSites = Array.isArray(arr[6]) ? arr[6] : [];
+      state.customPartners = Array.isArray(arr[7]) ? arr[7] : [];
       migrateLegacyPartner();
       updateDarkBtn();
       ensureRaEntryOnBoot();
@@ -15415,7 +15252,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   /* ========== 모달: 설정 ========== */
   function openSettings() {
     var modeLabel = storeMode === "idb" ? "저장됨" : storeMode === "local" ? "저장됨(제한)" : "저장 안 됨";
-    var hc = document.body.classList.contains("high-contrast");
     var dark = document.body.classList.contains("dark-mode");
     var h = '<div class="modal-back"><div class="modal-box" role="dialog" aria-modal="true">' +
       '<div class="modal-title">설정 · 시스템 정보</div>' +
@@ -15434,8 +15270,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<button type="button" class="btn-outline" id="set-history" style="width:100%;margin-bottom:8px">점검 이력 보기</button>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px">' +
       '<input type="checkbox" id="set-dark"' + (dark ? " checked" : "") + '> 다크모드</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:14px">' +
-      '<input type="checkbox" id="set-hc"' + (hc ? " checked" : "") + '> 고대비 모드</label>' +
       '<div class="modal-actions"><button type="button" class="btn-plain" id="set-close">닫기</button></div></div></div>';
     var layer = document.getElementById("modal-layer");
     layer.innerHTML = h;
@@ -15453,10 +15287,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       document.body.classList.toggle("dark-mode", ev.target.checked);
       storeSet(K_DARK, ev.target.checked);
       updateDarkBtn();
-    });
-    layer.querySelector("#set-hc").addEventListener("change", function (ev) {
-      document.body.classList.toggle("high-contrast", ev.target.checked);
-      storeSet(K_HC, ev.target.checked);
     });
     layer.querySelector(".modal-back").addEventListener("click", function (ev) {
       if (ev.target === ev.currentTarget) layer.innerHTML = "";
@@ -15832,7 +15662,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<div class="mobile-field-row mobile-gongsa-row">' + smartSvg("clipboard", 20) +
       '<input type="text" id="ra-inp-gongsa" value="' + esc(state.inspector.project || "") + '" autocomplete="off" placeholder="공사명을 입력">' +
       '<select id="ra-gongsa-pick" class="mobile-gongsa-pick" aria-label="저장된 공사명 선택" title="저장된 공사명">' +
-      '<option value="" selected>▾</option>' +
+      '<option value="" selected></option>' +
       listSavedGongsaOptionsHtml() +
       "</select>" +
       '<button type="button" class="mobile-gongsa-add" id="ra-gongsa-add" title="공사명 추가" aria-label="공사명 추가"></button>' +
