@@ -7356,9 +7356,6 @@ window.SMART_ITEMS = [
   --smart-surface: #FFFFFF;
   --smart-line: #D8E2EE;
   --smart-line-dark: #AEBFD1;
-  /* 앱 전체 드롭다운(select)의 통일된 표시 화살표 — 브라우저마다 다른
-     네이티브 화살표 대신 이 아이콘 하나로 통일 */
-  --smart-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B5DCC' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   /* "미산정/해당없음" 등 무채색 배지 배경 — 기존에 #EEF2F7/#f1f5f9/#f8fafc로
      제각각 흩어져 있던 근백색 회색을 하나로 통일 */
   --smart-neutral-soft: #EEF2F7;
@@ -7426,49 +7423,6 @@ body {
   padding-bottom: calc(var(--bar-h) + var(--safe-b) + 8px);
 }
 body.no-bottom-pad { padding-bottom: var(--safe-b); }
-
-/* 다크모드 — 글자·카드 대비 확보 */
-body.dark-mode {
-  --bg: #10151e;
-  --card: #252f3f;
-  --text: #ffffff;
-  --text-sub: #d0d8e4;
-  --line: #5a6a80;
-  --navy: #c8dbff;
-  --navy-soft: #3a5080;
-  --good-soft: #1a3d2a;
-  --good-soft-deep: #234f36;
-  --bad-soft: #4a201c;
-  --bad-soft-deep: #5c2824;
-  --na-soft: #3a4048;
-  --na-soft-deep: #4a515a;
-  --na: #c5cbd2;
-  color-scheme: dark;
-
-  /* RA 워크스페이스/결과 화면 등에서 쓰는 신규 디자인 토큰(--smart-*)은
-     레거시 토큰(--bg/--card/--text 등)에서 파생되지 않으므로 여기서 별도 재정의.
-     .pc-workspace/.pc-proc-row, .mobile-risk-dist, .mobile-pv-item,
-     .mobile-risk-header-proc 등이 이 값을 사용함 */
-  --smart-bg: var(--bg);
-  --smart-surface: var(--card);
-  --smart-line: var(--line);
-  --smart-line-dark: var(--line);
-  --smart-text: var(--text);
-  --smart-text-sub: var(--text-sub);
-  --smart-text-light: var(--text-sub);
-  --smart-muted: var(--text-sub);
-  --smart-danger-soft: var(--bad-soft);
-  --smart-warning-soft: #4a3a1c;
-  --smart-safe-soft: var(--good-soft);
-  --smart-blue-050: var(--navy-soft);
-}
-
-
-/* 헤더는 blue-900 유지(다크모드에서도) */
-
-
-
-
 
 
 
@@ -8110,15 +8064,6 @@ body.ra-ux .subnav-bar {
   border-radius: 2px;
   font-size: 14px;
   font-family: inherit;
-}
-.form-group select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: var(--smart-select-chevron);
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 14px 14px;
-  padding-right: 32px;
 }
 .form-group .req { color: var(--bad); }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
@@ -8785,15 +8730,6 @@ body.ra-ux .subnav-bar {
 .risk-select:focus {
   border-color: var(--smart-blue-700);
   box-shadow: 0 0 0 2px rgba(11, 93, 204, 0.15);
-}
-select.risk-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: var(--smart-select-chevron);
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 14px 14px;
-  padding-right: 30px;
 }
 .smart-span-2 { grid-column: 1 / -1; }
 
@@ -10442,12 +10378,6 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1; border: none !important; box-shadow: none !important;
     min-height: 46px; padding: 8px 0 !important; background: transparent !important;
   }
-  .mobile-field-row select {
-    appearance: none;
-    -webkit-appearance: none;
-    background: transparent var(--smart-select-chevron) no-repeat right 2px center / 14px 14px !important;
-    padding-right: 22px !important;
-  }
   .mobile-gongsa-row {
     gap: 6px;
     padding-right: 8px;
@@ -10456,17 +10386,17 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1 1 auto;
     min-width: 0;
   }
-  select.mobile-gongsa-pick {
+  .mobile-gongsa-pick {
     flex: 0 0 44px !important;
     width: 44px !important;
     min-width: 44px !important;
     max-width: 44px !important;
-    min-height: 44px !important;
+    min-height: 36px !important;
     padding: 0 !important;
     border: 1px solid var(--smart-line) !important;
     border-radius: 8px !important;
-    background: var(--smart-blue-050, #eef5ff) var(--smart-select-chevron) no-repeat center / 16px 16px !important;
-    color: transparent !important;
+    background: var(--smart-blue-050, #eef5ff) !important;
+    color: var(--smart-blue-800) !important;
     font-size: 14px;
     font-weight: 700;
     text-align: center;
@@ -10474,18 +10404,17 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     appearance: none;
     -webkit-appearance: none;
   }
-  .mobile-gongsa-pick option { color: var(--smart-text); }
   .mobile-gongsa-add {
-    flex: 0 0 44px;
+    flex: 0 0 28px;
     align-self: center;
     box-sizing: border-box;
     position: relative;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px !important;
-    max-width: 44px;
-    max-height: 44px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px !important;
+    max-width: 28px;
+    max-height: 28px;
     aspect-ratio: 1 / 1;
     overflow: hidden;
     border: 0;
@@ -11651,12 +11580,6 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1; border: none !important; box-shadow: none !important;
     min-height: 46px; padding: 8px 0 !important; background: transparent !important;
   }
-  body.ra-mockup .mobile-field-row select{
-    appearance: none;
-    -webkit-appearance: none;
-    background: transparent var(--smart-select-chevron) no-repeat right 2px center / 14px 14px !important;
-    padding-right: 22px !important;
-  }
   body.ra-mockup .mobile-gongsa-row{
     gap: 6px;
     padding-right: 8px;
@@ -11665,17 +11588,17 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     flex: 1 1 auto;
     min-width: 0;
   }
-  body.ra-mockup select.mobile-gongsa-pick{
+  body.ra-mockup .mobile-gongsa-pick{
     flex: 0 0 44px !important;
     width: 44px !important;
     min-width: 44px !important;
     max-width: 44px !important;
-    min-height: 44px !important;
+    min-height: 36px !important;
     padding: 0 !important;
     border: 1px solid var(--smart-line) !important;
     border-radius: 8px !important;
-    background: var(--smart-blue-050, #eef5ff) var(--smart-select-chevron) no-repeat center / 16px 16px !important;
-    color: transparent !important;
+    background: var(--smart-blue-050, #eef5ff) !important;
+    color: var(--smart-blue-800) !important;
     font-size: 14px;
     font-weight: 700;
     text-align: center;
@@ -11683,18 +11606,17 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     appearance: none;
     -webkit-appearance: none;
   }
-  body.ra-mockup .mobile-gongsa-pick option{ color: var(--smart-text); }
   body.ra-mockup .mobile-gongsa-add{
-    flex: 0 0 44px;
+    flex: 0 0 28px;
     align-self: center;
     box-sizing: border-box;
     position: relative;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px !important;
-    max-width: 44px;
-    max-height: 44px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px !important;
+    max-width: 28px;
+    max-height: 28px;
     aspect-ratio: 1 / 1;
     overflow: hidden;
     border: 0;
@@ -12029,20 +11951,6 @@ body.ra-mockup .mobile-form-card.mobile-risk-dist {
   background: var(--smart-line);
 }
 .mobile-risk-dist-bar > span { display: block; height: 100%; }
-
-/* 다크모드 보완: .mobile-risk-header(및 .mobile-risk-header-proc가 상속하는
-   기본 클래스)는 배경이 흰색(#fff)으로 고정 하드코딩되어 있어 위의
-   --smart-* 토큰 재정의만으로는 다크모드가 반영되지 않음 */
-body.dark-mode .mobile-risk-header {
-  background: var(--smart-surface) !important;
-}
-/* .smart-search 계열은 --smart-sheet(= var(--smart-surface))를 :root에서
-   한 번만 계산해 상속하므로 body.dark-mode의 --smart-surface 재정의가
-   전달되지 않음. 워크스페이스 검색창만 좁게 보정 */
-body.dark-mode #ra-item-search {
-  background: var(--smart-surface);
-  color: var(--smart-text);
-}
 
 /* 구성내용 검토: 항목별 구분선을 "제목 아래"가 아니라 "안전대책까지 포함한
    항목 전체 아래"로 옮겨서, 다음 항목과의 경계가 분명히 보이도록 함 */
@@ -12678,7 +12586,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   var K_INSPECTOR = "smart_v7_inspector";
   var K_HISTORY = "smart_v7_history";
   var K_NAV = "smart_v7_nav";
-  var K_DARK = "smart_v7_dark";
   var K_SITES = "smart_v7_sites";
   var K_PARTNERS = "smart_v7_partners";
   var DB_NAME = "smart_v7_db";
@@ -13039,7 +12946,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       storeGet(K_INSPECTOR),
       storeGet(K_HISTORY),
       storeGet(K_NAV),
-      storeGet(K_DARK),
       storeGet(K_SITES),
       storeGet(K_PARTNERS)
     ]).then(function (arr) {
@@ -13078,26 +12984,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
           if (!state.groupIds.length && arr[4].groupId) state.groupIds = [arr[4].groupId];
         }
       }
-      if (arr[5]) document.body.classList.toggle("dark-mode", !!arr[5]);
       window._history = arr[3] || [];
-      state.customSites = Array.isArray(arr[6]) ? arr[6] : [];
-      state.customPartners = Array.isArray(arr[7]) ? arr[7] : [];
+      state.customSites = Array.isArray(arr[5]) ? arr[5] : [];
+      state.customPartners = Array.isArray(arr[6]) ? arr[6] : [];
       migrateLegacyPartner();
-      updateDarkBtn();
       ensureRaEntryOnBoot();
     });
-  }
-
-  function updateDarkBtn() {
-    /* 다크모드는 설정 모달에서만 전환 */
-  }
-
-  function toggleDarkMode() {
-    var on = !document.body.classList.contains("dark-mode");
-    document.body.classList.toggle("dark-mode", on);
-    storeSet(K_DARK, on);
-    updateDarkBtn();
-    toast(on ? "다크모드 켜짐" : "다크모드 꺼짐");
   }
 
   /* ========== 트리 헬퍼 ========== */
@@ -15252,7 +15144,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   /* ========== 모달: 설정 ========== */
   function openSettings() {
     var modeLabel = storeMode === "idb" ? "저장됨" : storeMode === "local" ? "저장됨(제한)" : "저장 안 됨";
-    var dark = document.body.classList.contains("dark-mode");
     var h = '<div class="modal-back"><div class="modal-box" role="dialog" aria-modal="true">' +
       '<div class="modal-title">설정 · 시스템 정보</div>' +
       '<table class="smart-info-table"><tbody>' +
@@ -15268,8 +15159,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<button type="button" class="btn-outline" id="set-edit-insp" style="width:100%;margin-bottom:8px">점검자 정보 수정</button>' +
       '<div class="modal-title" style="margin-top:16px">점검 이력</div>' +
       '<button type="button" class="btn-outline" id="set-history" style="width:100%;margin-bottom:8px">점검 이력 보기</button>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px">' +
-      '<input type="checkbox" id="set-dark"' + (dark ? " checked" : "") + '> 다크모드</label>' +
       '<div class="modal-actions"><button type="button" class="btn-plain" id="set-close">닫기</button></div></div></div>';
     var layer = document.getElementById("modal-layer");
     layer.innerHTML = h;
@@ -15281,12 +15170,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     layer.querySelector("#set-history").addEventListener("click", function () {
       layer.innerHTML = "";
       openHistory();
-    });
-    var setDark = layer.querySelector("#set-dark");
-    if (setDark) setDark.addEventListener("change", function (ev) {
-      document.body.classList.toggle("dark-mode", ev.target.checked);
-      storeSet(K_DARK, ev.target.checked);
-      updateDarkBtn();
     });
     layer.querySelector(".modal-back").addEventListener("click", function (ev) {
       if (ev.target === ev.currentTarget) layer.innerHTML = "";
@@ -15662,7 +15545,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<div class="mobile-field-row mobile-gongsa-row">' + smartSvg("clipboard", 20) +
       '<input type="text" id="ra-inp-gongsa" value="' + esc(state.inspector.project || "") + '" autocomplete="off" placeholder="공사명을 입력">' +
       '<select id="ra-gongsa-pick" class="mobile-gongsa-pick" aria-label="저장된 공사명 선택" title="저장된 공사명">' +
-      '<option value="" selected></option>' +
+      '<option value="" selected>▾</option>' +
       listSavedGongsaOptionsHtml() +
       "</select>" +
       '<button type="button" class="mobile-gongsa-add" id="ra-gongsa-add" title="공사명 추가" aria-label="공사명 추가"></button>' +
