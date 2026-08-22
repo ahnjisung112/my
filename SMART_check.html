@@ -39,7 +39,7 @@ SMART 안전관리 플랫폼
       <span class="smart-doc-status" id="hdr-doc-status">구성 중</span>
       <span class="hdr-version" id="hdr-version"></span>
       <button type="button" id="btn-settings" class="btn-icon smart-btn-icon" aria-label="설정">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true">
           <path d="M4 7h16M4 12h16M4 17h16"/>
           <path d="M8 5v4M15 10v4M11 15v4"/>
         </svg>
@@ -51,11 +51,11 @@ SMART 안전관리 플랫폼
 
 <nav id="subnav-bar" class="subnav-bar hidden">
   <button type="button" id="btn-nav-home" class="subnav-btn">
-    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg></span>
+    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg></span>
     <span>초기화면</span>
   </button>
   <button type="button" id="btn-nav-back" class="subnav-btn">
-    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"><path d="M15 6L9 12l6 6"/></svg></span>
+    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M15 6L9 12l6 6"/></svg></span>
     <span>이전 단계</span>
   </button>
 </nav>
@@ -64,11 +64,11 @@ SMART 안전관리 플랫폼
 
 <nav id="bottom-bar" class="bottom-bar hidden">
   <button type="button" id="btn-temp-save" class="bottom-btn">
-    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><path d="M8 21v-7h8v7"/></svg></span>
+    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3"/><path d="M8 21v-7h8v7"/></svg></span>
     <span>문서 보관</span>
   </button>
   <button type="button" id="btn-report" class="bottom-btn bottom-btn-primary">
-    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"><path d="M6 3h9l3 3v15H6z"/><path d="M9 12h6M9 16h4"/></svg></span>
+    <span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M6 3h9l3 3v15H6z"/><path d="M9 12h6M9 16h4"/></svg></span>
     <span>문서 확정</span>
   </button>
 </nav>
@@ -16291,14 +16291,14 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   }
 
   function smartSvg(name, size) {
-    size = size || 20;
-    var sw = "1.7";
+    size = Math.round((size || 20) * 1.2);
+    var sw = "2";
     var paths = {
       symbol: '<path d="M3 7h6l3 5 3-5h6"/><circle cx="5" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="7" r="1.4" fill="currentColor" stroke="none"/><path d="M5 17h14"/><path d="M8 17v3M16 17v3"/>',
       document: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 12h6M9 16h4"/>',
       clipboard: '<path d="M9 4h6"/><path d="M8 4.5h8v3H8z"/><path d="M7 7h10v14H7z"/><path d="M10 12h4M10 16h4"/>',
       company: '<path d="M4 20V8l6-3 6 3v12"/><path d="M10 20V5"/><path d="M16 10h4v10h-4"/><path d="M7 11h2M7 15h2M13 11h2M13 15h2M18 14v2"/>',
-      calendar: '<path d="M5 6h14v14H5z"/><path d="M5 10h14"/><path d="M9 4v4M15 4v4"/><path d="M8 14h2M12 14h2M16 14h.01M8 17h2M12 17h2"/>',
+      calendar: '<path d="M5 6h14v14H5z"/><path d="M5 10h14"/><path d="M9 4v4M15 4v4"/><path d="M8 14h2M12 14h2M16 14h2M8 17h2M12 17h2"/>',
       person: '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c1.6-3.2 4-4.8 6.5-4.8S16.9 15.8 18.5 19"/>',
       process: '<path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v4M16 18h4"/>',
       risk: '<path d="M12 4l8 16H4L12 4z"/><path d="M12 10v4M12 16.5v.5"/>',
