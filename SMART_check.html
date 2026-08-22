@@ -9349,17 +9349,6 @@ body.ra-ux .subnav-bar {
   vertical-align: middle;
 }
 .smart-ico svg { display: block; }
-.field-emoji {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  font-size: 16px;
-  line-height: 1;
-  user-select: none;
-}
 
 /* Settings info table */
 .smart-info-table {
@@ -10689,8 +10678,7 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
   .mobile-gongsa-add::before { width: 12px; height: 2.4px; }
   .mobile-gongsa-add::after { width: 2.4px; height: 12px; }
   .mobile-gongsa-add:active { background: var(--smart-blue-800); }
-  .mobile-field-row .smart-ico,
-  .mobile-field-row .field-emoji {
+  .mobile-field-row .smart-ico {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -11892,8 +11880,7 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
   body.ra-mockup .mobile-gongsa-add::before{ width: 12px; height: 2.4px; }
   body.ra-mockup .mobile-gongsa-add::after{ width: 2.4px; height: 12px; }
   body.ra-mockup .mobile-gongsa-add:active{ background: var(--smart-blue-800); }
-  body.ra-mockup .mobile-field-row .smart-ico,
-  body.ra-mockup .mobile-field-row .field-emoji{
+  body.ra-mockup .mobile-field-row .smart-ico{
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -15842,7 +15829,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     html += '<p class="mobile-screen-sub">문서 표제에 들어갈 현장 정보를 입력하세요</p>';
     html += '<div class="mobile-form-card">';
     html += '<div class="mobile-field"><label>공사명 <span class="req-mark">*</span></label>' +
-      '<div class="mobile-field-row mobile-gongsa-row">' + fieldEmoji("clipboard") +
+      '<div class="mobile-field-row mobile-gongsa-row">' + smartSvg("clipboard", 20) +
       '<input type="text" id="ra-inp-gongsa" value="' + esc(state.inspector.project || "") + '" autocomplete="off" placeholder="공사명을 입력">' +
       '<select id="ra-gongsa-pick" class="mobile-gongsa-pick" aria-label="저장된 공사명 선택" title="저장된 공사명">' +
       '<option value="" selected>▾</option>' +
@@ -15854,14 +15841,14 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<div class="mobile-field-row">' +
       '<input type="text" id="ra-inp-upche" value="' + esc(state.inspector.partner || "") + '" placeholder="시공업체명"></div></div>';
     html += '<div class="mobile-field"><label>작성일 <span class="req-mark">*</span></label>' +
-      '<div class="mobile-field-row">' + fieldEmoji("calendar") +
+      '<div class="mobile-field-row">' + smartSvg("calendar", 20) +
       '<input type="date" id="ra-inp-date" class="mobile-date-input" value="' + esc(state.inspector.inspection_date || todayStr()) + '"></div></div>';
     html += '<div class="mobile-field"><label>작성자 <span class="req-mark">*</span></label>' +
-      '<div class="mobile-field-row">' + fieldEmoji("person") +
+      '<div class="mobile-field-row">' + smartSvg("person", 20) +
       '<input type="text" id="ra-inp-writer" value="' + esc(state.inspector.inspector_name || "") + '" autocomplete="name" placeholder="작성자 성명"></div></div>';
     if (groups.length > 1) {
       html += '<div class="mobile-field mobile-field-full"><label>현장(대장) 전환</label>' +
-        '<div class="mobile-field-row">' + fieldEmoji("process") +
+        '<div class="mobile-field-row">' + smartSvg("process", 20) +
         '<select id="ra-inp-site">';
       groups.forEach(function (gg) {
         html += '<option value="' + esc(gg.group_id) + '"' + (gg.group_id === state.groupId ? " selected" : "") + ">" +
@@ -16301,19 +16288,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var src = map[key] || "";
     if (!src) return "";
     return '<img class="process-png" src="' + src + '" alt="" width="512" height="512" decoding="async" draggable="false">';
-  }
-  /** RA-01 입력 필드용 이모지 아이콘 */
-  function fieldEmoji(name) {
-    var map = {
-      clipboard: "📋",
-      company: "🔧",
-      calendar: "📅",
-      person: "👤",
-      process: "📁",
-      search: "🔍"
-    };
-    var e = map[name] || "•";
-    return '<span class="field-emoji" aria-hidden="true">' + e + "</span>";
   }
 
   function smartSvg(name, size) {
