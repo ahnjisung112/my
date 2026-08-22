@@ -13392,7 +13392,20 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     return emailPdfWebFallback(blob, fname, email, subject, body);
   }
 
+  /* PC 환경에서는 OS 기본 메일 앱(mailto:) 대신 사내망 웹메일에서 보내도록 함 */
+  var COMPANY_WEBMAIL_URL = "https://mail.ewp.co.kr/mail/";
   function emailPdfWebFallback(blob, fname, email, subject, body) {
+    if (!isMobileLayout()) {
+      downloadPdfToBrowser(blob, fname);
+      try { window.open(COMPANY_WEBMAIL_URL, "_blank", "noopener"); } catch (e0) {}
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText("받는사람: " + email + "\n제목: " + subject + "\n\n" + body);
+        }
+      } catch (e1) {}
+      return Promise.resolve({ mode: "webmail" });
+    }
+
     // 2) Web Share Level 2 (파일 첨부)
     if (navigator.share && navigator.canShare) {
       try {
@@ -14100,10 +14113,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         toast("올바른 메일 주소를 입력하세요");
         return;
       }
-      setStatus("메일 앱을 여는 중…");
+      setStatus("메일 준비 중…");
       emailPdf(blob, fname, email).then(function (res) {
         emailedOnce = true;
-        if (res && res.mode === "mailto") {
+        if (res && res.mode === "webmail") {
+          setStatus("사내 웹메일을 새 탭에서 열었습니다. PDF는 다운로드 폴더에 저장했고, 받는사람·제목·본문은 클립보드에 복사했습니다. 웹메일 작성창에 붙여넣고 파일을 첨부해 보내 주세요.");
+        } else if (res && res.mode === "mailto") {
           setStatus("메일 앱을 열었습니다. PDF는 다운로드 폴더에 저장해 두었습니다. 첨부해 보내 주세요.");
         } else {
           setStatus("메일 앱을 열었습니다. 수신: " + email);
