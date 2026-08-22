@@ -7346,9 +7346,10 @@ window.SMART_ITEMS = [
   --smart-green-050: #F4FCF6;
 
   /* 선택 상태 전용 강조색 — 상/중/하 위험도 배지(빨강/주황/초록)와
-     의미가 겹치지 않도록 별도 색상 계열을 사용 */
-  --smart-accent: #7C3AED;
-  --smart-accent-soft: #F3EEFF;
+     의미가 겹치지 않도록 위험도 색상과는 분리하되, 앱 전체의 blue/green/white
+     팔레트를 벗어나지 않도록 기본 파랑(--smart-blue-700)을 그대로 사용 */
+  --smart-accent: var(--smart-blue-700);
+  --smart-accent-soft: var(--smart-blue-100);
 
   --smart-white: #FFFFFF;
   --smart-bg: #F4F7FB;
