@@ -1,1 +1,5 @@
 build/
+
+# Android native wrapper (Capacitor)
+native/node_modules/
+native/www/
