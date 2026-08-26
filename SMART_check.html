@@ -8433,6 +8433,15 @@ body.ra-mockup .mobile-field textarea:focus {
 body.ra-ux {
   background: var(--smart-bg);
 }
+/* 업무 화면 배경 구분: 위험성평가는 blue, 안전점검은 green */
+body.ra-ux:not(.sc-ux) {
+  --smart-bg: #F1F6FE;
+  background: linear-gradient(180deg, #EDF4FE 0, #F7FAFF 100%);
+}
+body.sc-ux {
+  --smart-bg: #F1FAF4;
+  background: linear-gradient(180deg, #ECF8F0 0, #F7FCF9 100%);
+}
 body.ra-ux #app-main {
   max-width: none;
   padding: 0;
@@ -12208,11 +12217,396 @@ body.ra-mockup #ra-preview-modal.pv-forced-landscape #ra-preview-body {
   }
 }
 
+/* 안전점검 4단계 UI — 위험성평가와 동일한 화면 밀도·가독성 */
+/* 로고 헤더는 화면·뒤로가기 상태와 관계없이 동일한 흰색 체계를 사용 */
+#app-header.smart-header,
+#app-header,
+body.ra-mockup #app-header.smart-header.mobile-smart-header,
+body.ra-mockup #app-header.mobile-smart-header {
+  background: #fff !important;
+  color: var(--smart-blue-900) !important;
+  border-bottom: 1px solid var(--smart-line) !important;
+  box-shadow: 0 1px 0 rgba(7, 58, 130, 0.04);
+}
+#app-header .smart-header-tagline,
+#app-header .hdr-row2 { display: none !important; }
+#app-header .smart-btn-icon {
+  color: var(--smart-blue-700) !important;
+  border-color: var(--smart-line-dark) !important;
+}
+#app-header .hdr-version { color: var(--smart-blue-700); }
+
+.home-header #app-header.smart-header,
+.home-header #app-header {
+  min-height: 76px;
+  padding: 12px 16px;
+  padding-top: calc(12px + var(--safe-t));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fff !important;
+  color: var(--smart-blue-900);
+  border-bottom: 1px solid var(--smart-line) !important;
+  box-shadow: 0 1px 0 rgba(7, 58, 130, 0.04);
+}
+.home-header #app-header .smart-header-main { padding-bottom: 0; }
+.home-header #app-header .smart-header-tagline,
+.home-header #app-header .hdr-row2 { display: none !important; }
+.home-header #app-header .smart-doc-status {
+  background: var(--smart-blue-100);
+  color: var(--smart-blue-800);
+  border-color: var(--smart-blue-600);
+  border-radius: 999px;
+}
+.home-header #app-header .smart-btn-icon {
+  color: var(--smart-blue-700);
+  border-color: var(--smart-line-dark);
+  border-radius: 10px;
+}
+.home-header #app-header .hdr-version { color: var(--smart-blue-700); }
+
+/* 초기 업무선택 화면 — 다음 단계와 같은 1000px 폭 */
+.home-header #app-main {
+  width: 100%;
+  max-width: 1000px;
+  padding: 24px 20px 44px;
+  box-sizing: border-box;
+}
+.home-screen { width: 100%; }
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 30px 32px;
+  border: 1px solid #c9daf0;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 88% 22%, rgba(24, 169, 87, 0.14), transparent 24%),
+    linear-gradient(135deg, #073a82 0%, #0b5dcc 62%, #0d7a69 100%);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(7, 58, 130, 0.16);
+}
+.home-hero::after {
+  content: "";
+  position: absolute;
+  right: -70px;
+  bottom: -105px;
+  width: 250px;
+  height: 250px;
+  border: 36px solid rgba(255,255,255,.08);
+  transform: rotate(28deg);
+}
+.home-hero-kicker {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: #bfe4ff;
+}
+.home-hero h1 {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 8px;
+  font-size: 28px;
+  line-height: 1.3;
+  letter-spacing: -.03em;
+}
+.home-hero p {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 0;
+  color: rgba(255,255,255,.84);
+  font-size: 14px;
+  line-height: 1.65;
+  word-break: keep-all;
+}
+.home-tools { margin: 18px 0 14px; }
+.home-tools .toolbar { margin-bottom: 0; }
+.home-tools .nav-search-input {
+  min-height: 48px;
+  border-radius: 10px;
+  border-color: var(--smart-line-dark);
+}
+.home-tools .btn-link {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+.home-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.home-type-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  min-height: 258px;
+  margin: 0;
+  padding: 30px 30px 24px;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--smart-text);
+  font: inherit;
+  text-align: left;
+  appearance: none;
+  box-shadow: 0 6px 18px rgba(7, 58, 130, 0.07);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.home-type-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(7, 58, 130, 0.13);
+}
+.home-type-card.home-type-ra { border-top: 4px solid var(--smart-blue-700); }
+.home-type-card.home-type-sc { border-top: 4px solid var(--smart-green-600); }
+.home-type-card .nav-card-title {
+  display: block;
+  font-size: clamp(40px, 4.3vw, 54px);
+  line-height: 1.08;
+  letter-spacing: -.055em;
+  font-weight: 900;
+  color: var(--smart-blue-900);
+}
+.home-type-card .nav-card-desc {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.home-type-detail {
+  display: block;
+  min-height: 40px;
+  margin-top: 12px;
+  color: var(--smart-text-sub);
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.home-type-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 20px;
+  color: var(--smart-blue-700);
+  font-size: 13px;
+  font-weight: 800;
+}
+.home-type-sc .home-type-action { color: var(--smart-green-700, #118443); }
+.sc-mobile-screen .req-mark { color: var(--smart-danger, #dc3545); }
+.sc-checklist-screen .judge-btn { border-radius: 10px; }
+.sc-checklist-screen .basis-box {
+  color: #3f536c;
+  background: #f5f8fc;
+  border-color: #dce5ef;
+}
+.sc-checklist-screen .item-name { color: var(--smart-blue-900, #073a82); }
+.sc-checklist-screen .item-card { scroll-margin-top: 150px; }
+.sc-result-screen .report-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sc-result-screen .report-table { min-width: 940px; }
+.sc-preview-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sc-preview-table-wrap .pv-table { min-width: 940px; }
+.sc-category-grid .mobile-process-card.is-disabled {
+  background: #f4f6f8;
+  border-color: #d9e0e8;
+  box-shadow: none;
+  opacity: 0.68;
+}
+.sc-category-grid .mobile-process-card.is-disabled .mobile-process-body {
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+.sc-category-grid .mobile-process-card.is-disabled .mobile-process-name,
+.sc-category-grid .mobile-process-card.is-disabled .mobile-process-count { color: #718096; }
+.sc-disabled-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e5e9ee;
+  color: #5d6875;
+  font-size: 10px;
+  font-weight: 800;
+}
+.sc-subcategory-panel {
+  grid-column: 1 / -1;
+  padding: 16px;
+  border: 1px solid var(--smart-blue-200, #b8d2f3);
+  border-radius: 14px;
+  background: var(--smart-blue-050, #f3f8ff);
+}
+.sc-subcategory-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--smart-blue-900);
+}
+.sc-subcategory-head strong { font-size: 15px; }
+.sc-subcategory-head small {
+  display: block;
+  margin-top: 3px;
+  color: var(--smart-text-sub);
+  font-size: 11px;
+  font-weight: 500;
+}
+.sc-subcategory-head span { font-size: 12px; color: var(--smart-text-sub); }
+.sc-subcategory-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.sc-subcategory-chip {
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 1px solid var(--smart-line-dark);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--smart-blue-900);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sc-subcategory-chip span {
+  display: block;
+  margin-top: 3px;
+  color: var(--smart-text-sub);
+  font-size: 10px;
+  font-weight: 600;
+}
+.sc-subcategory-chip.is-selected {
+  border-color: var(--smart-green-600);
+  background: var(--smart-green-100);
+  color: var(--smart-green-800);
+  box-shadow: inset 0 0 0 1px var(--smart-green-600);
+}
+.sc-report-signature {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  font-size: 13px;
+}
+.sc-report-signature strong { min-width: 72px; text-align: center; }
+.sc-sign-box {
+  min-width: 62px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #6b7280;
+  text-align: center;
+}
+.sc-photo-appendix {
+  margin-top: 18px;
+}
+.sc-photo-page {
+  padding: 18px;
+  border: 1px solid var(--smart-line);
+  border-radius: 14px;
+  background: #fff;
+}
+.sc-photo-page + .sc-photo-page { margin-top: 14px; }
+.sc-photo-page-title {
+  margin-bottom: 14px;
+  color: var(--smart-blue-900);
+  font-size: 17px;
+  font-weight: 800;
+}
+.sc-photo-report-item {
+  margin: 0;
+  min-width: 0;
+}
+.sc-photo-report-label {
+  margin-bottom: 7px;
+  color: #253247;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.sc-photo-report-details {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  margin: 0 0 14px;
+  border-top: 1px solid #cbd5e1;
+  border-left: 1px solid #cbd5e1;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.sc-photo-report-details dt,
+.sc-photo-report-details dd {
+  margin: 0;
+  padding: 8px 10px;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+}
+.sc-photo-report-details dt {
+  background: #edf4ff;
+  color: var(--smart-blue-900);
+  font-weight: 800;
+}
+.sc-photo-report-details dd {
+  background: #fff;
+  color: #27364b;
+  white-space: pre-wrap;
+}
+.sc-photo-report-image {
+  display: block;
+  width: 100%;
+  height: 380px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  object-fit: contain;
+}
+@media (max-width: 700px) {
+  .home-header #app-main { padding: 14px 14px 32px; }
+  .home-hero { padding: 22px 20px; border-radius: 14px; }
+  .home-hero h1 { font-size: 22px; }
+  .home-hero p { font-size: 13px; }
+  .home-type-grid { grid-template-columns: 1fr; gap: 12px; }
+  .home-type-card { min-height: 220px; padding: 24px 20px 20px; }
+  .home-type-card .nav-card-title { font-size: 38px; }
+  .home-type-detail { min-height: 0; }
+  .sc-category-grid .mobile-process-card { min-height: 188px; }
+  .sc-result-screen .report-panel { padding: 14px; }
+  .sc-subcategory-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sc-subcategory-panel { padding: 12px; }
+  .sc-photo-page { padding: 12px; }
+  .sc-photo-report-details { grid-template-columns: 96px minmax(0, 1fr); font-size: 11px; }
+  .sc-photo-report-details dt, .sc-photo-report-details dd { padding: 7px 8px; }
+  .sc-photo-report-image { height: auto; max-height: 360px; }
+}
+
 /* 인쇄 폴백 */
 @media print {
   .bottom-bar, #app-header, .banner, #toast-layer, .toolbar, .btn-back, #ra-preview-modal, #subnav-bar { display: none !important; }
   body { padding: 0; background: #fff; }
   .report-panel { border: none; }
+  .sc-photo-page {
+    break-before: page;
+    page-break-before: always;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .sc-photo-page + .sc-photo-page { margin-top: 0; }
+  .sc-photo-report-details { grid-template-columns: 30mm 1fr; font-size: 9pt; }
+  .sc-photo-report-details dt, .sc-photo-report-details dd { padding: 2.2mm 2.5mm; }
+  .sc-photo-report-image { height: 130mm; border-radius: 0; }
   .pv-credit, .pv-print-footer { display: block !important; color: #555 !important; }
   .pv-print-footer {
     position: fixed; bottom: 6mm; left: 0; right: 0;
@@ -12677,6 +13071,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     raExpanded: {},
     raSearchQ: "",
     raStep: 1,
+    scStep: 1,
     raOnlySelected: false,
     raFocusSub: null,
     raFocusItem: null,
@@ -12690,6 +13085,8 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     customSites: [],
     raSiteKey: "",
     customPartners: [],
+    /** 안전점검 대분류별 중분류 선택 { [groupId]: string[] } — 미저장 시 전체 선택 */
+    scSelectedSubs: {},
     subIds: [],
     groupIds: []
   };
@@ -12706,21 +13103,20 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
   }
 
-  // action_deadline stored values are migrated over time:
-  // - old: date only (YYYY-MM-DD)
-  // - new: datetime-local (YYYY-MM-DDTHH:mm)
+  // action_deadline is date-only. Older datetime values remain readable and
+  // are normalized to YYYY-MM-DD when shown or exported.
   function normalizeDeadlineForInput(v) {
     if (!v) return "";
     v = String(v);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v + "T00:00";
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return v.slice(0, 16);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return v.slice(0, 10);
     return v;
   }
   function formatDeadlineForText(v) {
     if (!v) return "";
     v = String(v);
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return v.slice(0, 16).replace("T", " ");
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return v.slice(0, 10);
     return v;
   }
 
@@ -12971,6 +13367,9 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         screen: state.screen,
         raSiteKey: state.raSiteKey || "",
         raStep: state.raStep || 1,
+        scStep: state.scStep || 1,
+        scSelectionMode: "manual-v1",
+        scSelectedSubs: state.scSelectedSubs || {},
         raSelSubs: state.raSelSubs || [],
         raSelSubWorks: state.raSelSubWorks || {},
         raStepVisited: state.raStepVisited || {},
@@ -13009,6 +13408,10 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         if (arr[4].screen) state.screen = arr[4].screen;
         if (arr[4].raSiteKey) state.raSiteKey = arr[4].raSiteKey;
         if (arr[4].raStep) state.raStep = Number(arr[4].raStep) || 1;
+        if (arr[4].scStep) state.scStep = Number(arr[4].scStep) || 1;
+        if (arr[4].scSelectedSubs && typeof arr[4].scSelectedSubs === "object") {
+          state.scSelectedSubs = arr[4].scSelectedSubs;
+        }
         if (Array.isArray(arr[4].raSelSubs) && arr[4].raSelSubs.length) {
           state.raSelSubs = arr[4].raSelSubs.slice();
         }
@@ -13021,12 +13424,25 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         if (state.screen === "ra-input" || state.screen === "ra-result") {
           if (!state.raSelSubs.length && state.subIds.length) state.raSelSubs = state.subIds.slice();
         }
-        /* SC는 공종 다중선택 UX — 예전 subs 화면·subIds 잔여 정리 */
+        /* SC는 전용 4단계 UX만 사용 — 구형 groups/subs 경로가 비활성 규칙을 우회하지 않게 통합 */
         if (state.typeId === "SC") {
           state.subIds = [];
           state.subId = null;
-          if (state.screen === "subs") state.screen = "groups";
-          if (!state.groupIds.length && arr[4].groupId) state.groupIds = [arr[4].groupId];
+          if (arr[4].scSelectionMode !== "manual-v1") {
+            /* 097 이전 자동 전체선택 상태는 새 수동선택 규칙으로 가져오지 않는다. */
+            state.groupId = null;
+            state.groupIds = [];
+            state.scSelectedSubs = {};
+            if (state.screen !== "types") {
+              state.screen = "sc-input";
+              state.scStep = 2;
+            }
+          }
+          if (state.screen === "groups" || state.screen === "subs") {
+            state.screen = "sc-input";
+            state.scStep = 2;
+          }
+          if (arr[4].scSelectionMode === "manual-v1" && !state.groupIds.length && arr[4].groupId) state.groupIds = [arr[4].groupId];
         }
       }
       window._history = arr[3] || [];
@@ -13087,17 +13503,57 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   function isScCategoryMulti() {
     return state.typeId === "SC";
   }
+  var SC_DISABLED_GROUPS = {
+    "SC-EXCAV": true,
+    "SC-HIGH": true,
+    "SC-DROP": true,
+    "SC-PASS": true,
+    "SC-PERMIT": true,
+    "SC-EMER": true,
+    "SC-PPE": true
+  };
+  function isScGroupDisabled(groupId) {
+    return !!SC_DISABLED_GROUPS[groupId];
+  }
+  function getScActiveSelectedGroupIds() {
+    return getSelectedGroupIds().filter(function (gid) { return !isScGroupDisabled(gid); });
+  }
+  function getScSubIds(groupId) {
+    var g = getGroup("SC", groupId);
+    return (g && g.subs ? g.subs : []).filter(function (s) {
+      return s.status !== "preparing";
+    }).map(function (s) { return s.sub_id; });
+  }
+  function getScSelectedSubIds(groupId) {
+    var all = getScSubIds(groupId);
+    var saved = state.scSelectedSubs && state.scSelectedSubs[groupId];
+    /* 미저장 상태는 전체가 아니라 미선택이다. 점검자가 중분류를 직접 고른다. */
+    if (!Array.isArray(saved)) return [];
+    return saved.filter(function (sid) { return all.indexOf(sid) >= 0; });
+  }
+  function getScItemIdsForGroup(groupId) {
+    if (isScGroupDisabled(groupId)) return [];
+    var g = getGroup("SC", groupId);
+    if (!g) return [];
+    var subs = g.subs || [];
+    if (!subs.length) return collectItemIds(g);
+    var ids = [];
+    getScSelectedSubIds(groupId).forEach(function (sid) {
+      var sub = getSub("SC", groupId, sid);
+      if (sub) ids = ids.concat(collectItemIds(sub));
+    });
+    return ids;
+  }
   function getCurrentItemIds() {
     var ids = [];
     if (state.typeId === "RA" && (state.screen === "ra-input" || state.screen === "ra-result")) {
       return getRaSelectedItemIds();
     }
     if (isScCategoryMulti()) {
-      getSelectedGroupIds().forEach(function (gid) {
-        var g = getGroup("SC", gid);
-        if (g) ids = ids.concat(collectItemIds(g));
+      getScActiveSelectedGroupIds().forEach(function (gid) {
+        ids = ids.concat(getScItemIdsForGroup(gid));
       });
-      return ids;
+      return ids.filter(function (id, idx, arr) { return arr.indexOf(id) === idx; });
     }
     getSelectedSubIds().forEach(function (sid) {
       var sub = getSub(state.typeId, state.groupId, sid);
@@ -13180,7 +13636,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   function isActionIncomplete(itemId) {
     var r = state.results[itemId];
     if (!r || r.judgment !== "bad") return false;
-    return r.action_status !== "done" && r.action_status !== "recheck" && r.action_status !== "na";
+    return !String(r.action_deadline || "").trim();
   }
 
   /* ========== 사진 리사이즈 ==========
@@ -13822,9 +14278,68 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     return { doc: doc, fname: fname, blob: blob };
   }
 
+  function collectScPhotoEntries(itemIds, results, photos) {
+    var entries = [];
+    (itemIds || []).forEach(function (id) {
+      var r = results && results[id];
+      var itemPhotos = photos && photos[id];
+      if (!(r && r.judgment === "bad" && itemPhotos && itemPhotos.length)) return;
+      var it = ITEM_MAP[id];
+      var label = it ? it.item_name : id;
+      itemPhotos.forEach(function (ph, photoIndex) {
+        if (!ph || !(ph.full || ph.thumb)) return;
+        entries.push({
+          id: id,
+          label: label,
+          legalBasis: formatLegalBasisText(it),
+          basisContent: formatBasisContentText(it),
+          deficiency: String(r.action_text || (it && it.action_template) || "현장 확인 후 미흡 내용을 기재하세요.").trim(),
+          photoIndex: photoIndex,
+          photoTotal: itemPhotos.length,
+          ph: ph
+        });
+      });
+    });
+    return entries;
+  }
+
+  function buildScPhotoAppendixHTML(itemIds, results, photos) {
+    var entries = collectScPhotoEntries(itemIds, results, photos);
+    if (!entries.length) return "";
+    var html = '<div class="sc-photo-appendix" aria-label="불량 사진 첨부">';
+    entries.forEach(function (entry, i) {
+      html += '<section class="sc-photo-page">' +
+        '<div class="sc-photo-page-title">불량 사진 첨부 ' + (i + 1) + " / " + entries.length + "</div>" +
+        '<figure class="sc-photo-report-item">' +
+        '<figcaption class="sc-photo-report-label">' + esc(entry.label) +
+        (entry.photoTotal > 1 ? " - 사진 " + (entry.photoIndex + 1) : "") + "</figcaption>" +
+        '<dl class="sc-photo-report-details">' +
+        '<dt>점검사항</dt><dd>' + esc(entry.label) + "</dd>" +
+        '<dt>법적 근거</dt><dd>' + esc(entry.legalBasis || "-") + "</dd>" +
+        '<dt>점검기준</dt><dd>' + esc(entry.basisContent || "-") + "</dd>" +
+        '<dt>미흡 내용·조치요구</dt><dd>' + esc(entry.deficiency || "-") + "</dd>" +
+        '</dl><img class="sc-photo-report-image" src="' + (entry.ph.full || entry.ph.thumb) + '" alt="' + esc(entry.label) + ' 불량 사진"></figure></section>';
+    });
+    return html + "</div>";
+  }
+
+  function fitScPdfPhoto(ph, maxW, maxH) {
+    var sourceW = Number(ph && ph.w) || maxW;
+    var sourceH = Number(ph && ph.h) || maxH;
+    var scale = Math.min(maxW / sourceW, maxH / sourceH);
+    return { w: sourceW * scale, h: sourceH * scale };
+  }
+
   function generateScPdf(itemIds) {
+    var missingDeadlineIds = (itemIds || []).filter(function (id) {
+      var result = state.results[id] || {};
+      return result.judgment === "bad" && !String(result.action_deadline || "").trim();
+    });
+    if (missingDeadlineIds.length) {
+      throw new Error("불량 항목의 조치기한을 모두 입력해 주세요.");
+    }
     var jsPDF = getJsPDF();
-    var doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: false, putOnlyUsedFonts: true });
+    var doc = new jsPDF({ orientation: "l", unit: "mm", format: "a4", compress: false, putOnlyUsedFonts: true });
     var ctxPath = getContextPath();
     var siteLabel = getSiteLabel();
     var insp = Object.assign({}, state.inspector);
@@ -13847,60 +14362,93 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       return it && it.standard_type === "현장기준";
     });
 
-    var y = 16;
-    var ml = 14, pw = 182;
-    var pageW = 210;
+    var pageW = 297, pageH = 210;
+    var ml = 12, mr = 12, pw = pageW - ml - mr;
+    var y = 12;
+    var navy = SMART_PDF_RGB.navy;
+    var accent = SMART_PDF_RGB.accent;
+    var beige = SMART_PDF_RGB.beige;
+    var labelBg = SMART_PDF_RGB.labelBg;
+    var lineC = SMART_PDF_RGB.lineC;
+    var softLine = SMART_PDF_RGB.softLine;
 
-    /* 제목 중앙정렬 */
-    doc.setFontSize(16);
-    setupPdfFont(doc);
-    pdfText(doc, "안전점검 보고서", pageW / 2, y, { align: "center" });
-    y += 10;
+    /* 위험성평가 문서와 동일한 브랜드 배너 */
+    function drawScBanner(title, subtitle) {
+      doc.setDrawColor(navy[0], navy[1], navy[2]);
+      doc.setLineWidth(0.8);
+      doc.rect(ml, y, pw, 18);
+      doc.setDrawColor(accent[0], accent[1], accent[2]);
+      doc.setLineWidth(0.7);
+      doc.line(ml, y + 18, ml + pw, y + 18);
+      doc.setLineWidth(0.2);
+      doc.setFontSize(9);
+      setupPdfFont(doc);
+      doc.setTextColor(104, 113, 122);
+      pdfText(doc, "SMART / SAFETY CHECK DOCUMENT · " + raDocNo(), ml + 4, y + 6);
+      doc.setTextColor(navy[0], navy[1], navy[2]);
+      doc.setFontSize(14);
+      pdfText(doc, title, ml + 4, y + 12.5);
+      doc.setFontSize(8);
+      doc.setTextColor(104, 113, 122);
+      pdfText(doc, subtitle || "산업안전보건기준에 관한 규칙 준거 · 문서상태: 출력 전 검토", ml + 52, y + 12.5);
+      doc.setTextColor(0, 0, 0);
+      y += 22;
+    }
 
-    /* 양호/불량/해당없음 40% 축소, 축소분은 비고에 배분 */
-    var cols = [8, 48, 75, 9, 9, 9, 24];
-    var headers = ["번호", "점검사항", "근거", "양호", "불량", "해당없음", "비고"];
-    var centerCols = { 0: true, 3: true, 4: true, 5: true };
-    var tableTop = y;
-    var headerH = 11;
-    var headerFs = 9;
+    drawScBanner("안전점검 보고서", "점검분야: " + ctxPath + " · 문서상태: 출력 전 검토");
+
+    /* 위험성평가와 같은 정보 표 */
+    var infoH = 7;
+    function infoPair(x, w, label, value) {
+      var lw = 24;
+      doc.setFillColor(labelBg[0], labelBg[1], labelBg[2]);
+      doc.setDrawColor(lineC[0], lineC[1], lineC[2]);
+      doc.rect(x, y, lw, infoH, "FD");
+      doc.setFontSize(8);
+      setupPdfFont(doc);
+      doc.setTextColor(navy[0], navy[1], navy[2]);
+      pdfText(doc, label, x + lw / 2, y + infoH / 2 + 1, { align: "center" });
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x + lw, y, w - lw, infoH, "FD");
+      doc.setTextColor(32, 38, 45);
+      var valueLines = wrapText(doc, value || "", w - lw - 4);
+      pdfText(doc, valueLines[0] || "", x + lw + 2, y + infoH / 2 + 1);
+    }
+    var half = pw / 2;
+    infoPair(ml, pw, "공사명", insp.project || siteLabel || "");
+    y += infoH;
+    infoPair(ml, half, "시공업체", insp.partner || "");
+    infoPair(ml + half, half, "점검일", insp.inspection_date || todayStr());
+    y += infoH;
+    infoPair(ml, half, "점검자", insp.inspector_name || "");
+    infoPair(ml + half, half, "문서번호", raDocNo());
+    y += infoH + 3;
+
+    /* 안전점검 데이터는 유지하고 표 양식만 위험성평가와 통일 */
+    var cols = [10, 40, 52, 70, 12, 12, 16, 61]; /* sum 273 = pw */
+    var headers = ["No.", "점검사항", "법적 근거", "점검기준", "양호", "불량", "해당없음", "조치사항"];
+    var centerCols = { 0: true, 4: true, 5: true, 6: true };
+    var headerH = 9;
+    var lineH = 3.4;
 
     function drawHeaderRow(topY) {
       drawPdfHeaderRow(doc, {
         x: ml, y: topY, cols: cols, headers: headers, headerH: headerH,
-        fill: [232, 232, 232], border: [0, 0, 0], text: [40, 40, 40],
-        fontSize: headerFs, textYOffset: 1.2,
-        twoLineHeader: { match: "해당없음", a: "해당", b: "없음", y1: 4.2, y2: 8.4 }
+        fill: navy, border: [170, 170, 170], text: [255, 255, 255],
+        fontSize: 7.5, textYOffset: 1
       });
-      doc.setDrawColor(0, 0, 0);
-      doc.setFontSize(8);
-      setupPdfFont(doc);
     }
 
-    drawHeaderRow(tableTop);
-    y = tableTop + headerH;
+    drawHeaderRow(y);
+    y += headerH;
 
-    /* 표 행용: 페이지 넘김 시 헤더 재출력 (하단 크레디트·꼬리말 여백) */
     function ensureTableSpace(need) {
-      if (y + need > 268) {
+      if (y + need > pageH - 18) {
         doc.addPage();
         setupPdfFont(doc);
-        doc.setFontSize(8);
-        doc.setDrawColor(0, 0, 0);
-        y = 15;
+        y = 12;
         drawHeaderRow(y);
         y += headerH;
-      }
-    }
-
-    /* 표 아래 정보용: 헤더 없이 빈 페이지만 */
-    function ensureFooterSpace(need) {
-      if (y + need > 268) {
-        doc.addPage();
-        setupPdfFont(doc);
-        doc.setFontSize(10);
-        doc.setDrawColor(0, 0, 0);
-        y = 20;
       }
     }
 
@@ -13908,96 +14456,142 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       var it = ITEM_MAP[id];
       var r = resultsSnap[id] || {};
       var j = r.judgment;
-      var basis = formatBasisText(it);
+      var legalBasis = formatLegalBasisText(it);
+      var basisContent = formatBasisContentText(it);
       var note = "";
       if (j === "bad") {
         note = (r.action_text || "") + (r.action_deadline ? " / 기한:" + formatDeadlineForText(r.action_deadline) : "");
-        if (r.action_status) note += " / " + actionStatusLabel(r.action_status);
       }
       var nameLines = wrapText(doc, it ? it.item_name : id, cols[1] - 2);
-      var basisLines = wrapText(doc, basis, cols[2] - 2);
-      var noteLines = wrapText(doc, note, cols[6] - 2);
-      var rowH = Math.max(12, nameLines.length * 4, basisLines.length * 4, noteLines.length * 4) + 4;
+      var legalLines = wrapText(doc, legalBasis, cols[2] - 2);
+      var contentLines = wrapText(doc, basisContent, cols[3] - 2);
+      var noteLines = wrapText(doc, note, cols[7] - 2);
+      var rowH = Math.max(10, nameLines.length * lineH, legalLines.length * lineH, contentLines.length * lineH, noteLines.length * lineH) + 3;
       ensureTableSpace(rowH);
 
       var x = ml;
       var cells = [
         String(idx + 1),
         nameLines,
-        basisLines,
+        legalLines,
+        contentLines,
         j === "good" ? "O" : "",
         j === "bad" ? "O" : "",
         j === "na" ? "O" : "",
         noteLines
       ];
       cells.forEach(function (cell, ci) {
-        doc.setDrawColor(0, 0, 0);
-        doc.rect(x, y, cols[ci], rowH);
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(204, 204, 204);
+        doc.rect(x, y, cols[ci], rowH, "FD");
+        doc.setFontSize(7);
+        setupPdfFont(doc);
+        doc.setTextColor(32, 38, 45);
         if (centerCols[ci]) {
           var str = typeof cell === "string" ? cell : (cell[0] || "");
           if (str) {
-            pdfText(doc, str, x + cols[ci] / 2, y + rowH / 2 + 1.2, { align: "center" });
+            if (ci === 5) doc.setTextColor(220, 53, 69);
+            else if (ci === 4) doc.setTextColor(22, 163, 74);
+            pdfText(doc, str, x + cols[ci] / 2, y + rowH / 2 + 1, { align: "center" });
+            doc.setTextColor(32, 38, 45);
           }
         } else if (typeof cell === "string") {
-          pdfText(doc, cell, x + 1, y + 5);
+          pdfText(doc, cell, x + 1.2, y + 4);
         } else {
-          cell.forEach(function (ln, li) { pdfText(doc, ln, x + 1, y + 5 + li * 4); });
+          cell.forEach(function (ln, li) { pdfText(doc, ln, x + 1.2, y + 4 + li * lineH); });
         }
         x += cols[ci];
       });
       y += rowH;
     });
 
-    y += 8;
-    ensureFooterSpace(45);
-    doc.setFontSize(10);
-    setupPdfFont(doc);
-    pdfText(doc, "점검분야: " + ctxPath, ml, y); y += 6;
-    if (siteLabel) { pdfText(doc, "현장: " + siteLabel, ml, y); y += 6; }
-    pdfText(doc, "점검자: " + (insp.inspector_name || ""), ml, y); y += 5;
-    if (insp.affiliation) { pdfText(doc, "소속: " + insp.affiliation, ml, y); y += 5; }
-    if (insp.plant) { pdfText(doc, "사업소: " + insp.plant, ml, y); y += 5; }
-    if (insp.project) { pdfText(doc, "공사명: " + insp.project, ml, y); y += 5; }
-    if (insp.partner) { pdfText(doc, "협력사: " + insp.partner, ml, y); y += 5; }
-    pdfText(doc, "점검일: " + (insp.inspection_date || todayStr()), ml, y); y += 8;
-
-    if (hasUnverified) {
-      pdfText(doc, "※ 법령 조문 검증전 초안", ml, y); y += 5;
-    }
-    if (onlySite) {
-      pdfText(doc, "출처: 공사안전보건대장", ml, y); y += 5;
-    }
-
-    ensureFooterSpace(14);
-    var signer = insp.inspector_name || "       ";
-    pdfText(doc, "점검자 :     " + signer + "     (인)", ml, y + 8);
-
-    var photoEntries = [];
+    y += 3;
+    var counts = { good: 0, bad: 0, na: 0, unset: 0 };
     itemIds.forEach(function (id) {
-      if (!(resultsSnap[id] && resultsSnap[id].judgment === "bad" && photosSnap[id] && photosSnap[id].length)) return;
-      var it = ITEM_MAP[id];
-      var label = it ? it.item_name : id;
-      (photosSnap[id] || []).forEach(function (ph) {
-        photoEntries.push({ label: label, ph: ph });
-      });
+      var judgment = resultsSnap[id] && resultsSnap[id].judgment;
+      if (judgment === "good") counts.good++;
+      else if (judgment === "bad") counts.bad++;
+      else if (judgment === "na") counts.na++;
+      else counts.unset++;
     });
-    var imgW = 120, imgH = 90;
-    var slotYs = [22, 160];
-    photoEntries.forEach(function (entry, i) {
-      var slot = i % 2;
-      if (slot === 0) {
-        doc.addPage();
-        setupPdfFont(doc);
-      }
-      doc.setFontSize(10);
+    var summaryH = 9;
+    var sigH = 18;
+    if (y + summaryH + sigH + 15 > pageH - 18) {
+      doc.addPage();
       setupPdfFont(doc);
-      var topY = slotYs[slot];
-      pdfText(doc, "불량 사진: " + entry.label, ml, topY - 5);
+      y = 12;
+    }
+    doc.setFillColor(beige[0], beige[1], beige[2]);
+    doc.setDrawColor(softLine[0], softLine[1], softLine[2]);
+    doc.rect(ml, y, pw, summaryH, "FD");
+    doc.setFontSize(7);
+    setupPdfFont(doc);
+    doc.setTextColor(21, 34, 56);
+    var summaryText = "점검결과: 양호 " + counts.good + " · 불량 " + counts.bad + " · 해당없음 " + counts.na + " · 미점검 " + counts.unset;
+    if (hasUnverified) summaryText += " | 법령 조문 검증전 초안";
+    if (onlySite) summaryText += " | 출처: 공사안전보건대장";
+    pdfText(doc, summaryText, ml + 3, y + 5.5);
+    y += 13;
+
+    var sigW = 32;
+    var sigX = pageW - mr - sigW;
+    doc.setDrawColor(lineC[0], lineC[1], lineC[2]);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(sigX, y, sigW, sigH, "FD");
+    doc.setFontSize(7);
+    setupPdfFont(doc);
+    doc.setTextColor(85, 85, 85);
+    pdfText(doc, "점 검 자", sigX + sigW / 2, y + 5, { align: "center" });
+    if (insp.inspector_name) {
+      doc.setTextColor(32, 38, 45);
+      pdfText(doc, insp.inspector_name, sigX + sigW / 2, y + 11, { align: "center" });
+    }
+    doc.setDrawColor(204, 204, 204);
+    doc.line(sigX + 4, y + sigH - 5, sigX + sigW - 4, y + sigH - 5);
+
+    var photoEntries = collectScPhotoEntries(itemIds, resultsSnap, photosSnap);
+    photoEntries.forEach(function (entry, i) {
+      doc.addPage();
+      setupPdfFont(doc);
+      y = 12;
+      drawScBanner("불량 사진 첨부 " + (i + 1) + " / " + photoEntries.length, entry.label);
+
+      var detailY = y;
+      function drawPhotoDetailRow(label, value) {
+        doc.setFontSize(8.5);
+        setupPdfFont(doc);
+        var labelW = 38;
+        var valueW = pw - labelW;
+        var lines = wrapText(doc, value || "-", valueW - 4);
+        var rowH = Math.max(9, lines.length * 4 + 4);
+        doc.setFillColor(labelBg[0], labelBg[1], labelBg[2]);
+        doc.setDrawColor(lineC[0], lineC[1], lineC[2]);
+        doc.rect(ml, detailY, labelW, rowH, "FD");
+        doc.rect(ml + labelW, detailY, valueW, rowH);
+        doc.setTextColor(navy[0], navy[1], navy[2]);
+        pdfText(doc, label, ml + labelW / 2, detailY + rowH / 2 + 1.2, { align: "center" });
+        doc.setTextColor(32, 38, 45);
+        lines.forEach(function (line, lineIndex) {
+          pdfText(doc, line, ml + labelW + 2, detailY + 5 + lineIndex * 4);
+        });
+        detailY += rowH;
+      }
+
+      drawPhotoDetailRow("점검사항", entry.label);
+      drawPhotoDetailRow("법적 근거", entry.legalBasis);
+      drawPhotoDetailRow("점검기준", entry.basisContent);
+      drawPhotoDetailRow("미흡 내용·조치요구", entry.deficiency);
+
       /* 반드시 full 사용(thumb은 UI용 저해상도) */
       var imgData = entry.ph.full || entry.ph.thumb;
       if (imgData) {
         try {
-          pdfAddImage(doc, imgData, "JPEG", ml, topY, imgW, imgH);
+          var imageTop = detailY + 8;
+          var maxImgW = 230;
+          var maxImgH = Math.max(45, pageH - 18 - imageTop);
+          var fitted = fitScPdfPhoto(entry.ph, maxImgW, maxImgH);
+          var imgX = (pageW - fitted.w) / 2;
+          pdfAddImage(doc, imgData, "JPEG", imgX, imageTop, fitted.w, fitted.h);
         } catch (e) {
           console.warn("PDF photo skip:", e);
         }
@@ -14011,22 +14605,29 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       title: fname.replace(/\.pdf$/i, ""),
       author: (insp.inspector_name || "").trim()
     });
-    return { doc: doc, fname: fname, blob: blob };
+    return { doc: doc, fname: fname, blob: blob, photoCount: photoEntries.length };
   }
 
   function formatBasisText(it) {
     if (!it) return "";
+    return [formatLegalBasisText(it), formatBasisContentText(it)].filter(Boolean).join(" ");
+  }
+  function formatLegalBasisText(it) {
+    if (!it) return "";
     var parts = [];
     if (it.standard_name) parts.push(it.standard_name);
     if (it.article) parts.push(it.article);
-    if (it.criteria) parts.push(it.criteria);
-    if (it.standard_type === "현장기준" && it.site_plan) parts.push(it.site_plan);
+    if (!parts.length && it.standard_type) parts.push(it.standard_type);
     return parts.join(" ");
   }
-
-  function actionStatusLabel(s) {
-    var m = { progress: "조치중", done: "조치완료", recheck: "재점검완료", na: "해당없음" };
-    return m[s] || s;
+  function formatBasisContentText(it) {
+    if (!it) return "";
+    var parts = [];
+    [it.criteria, it.site_plan, it.site_note].forEach(function (v) {
+      v = String(v || "").trim();
+      if (v && parts.indexOf(v) < 0) parts.push(v);
+    });
+    return parts.join(" ");
   }
 
   function isValidEmail(v) {
@@ -14063,17 +14664,40 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       return;
     }
     w.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>안전점검 보고서</title>" +
-      "<style>@page{margin:12mm 12mm 16mm}body{font-family:'Malgun Gothic',sans-serif;padding:12px;color:#111}" +
+      "<style>@page{size:A4 landscape;margin:12mm 12mm 16mm}body{font-family:'Malgun Gothic',sans-serif;padding:12px;color:#111}" +
       ".pv-info{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}" +
       ".pv-info td{border:1px solid #999;padding:4px 7px}.pv-info .lbl{background:#eee;font-weight:bold;width:65px;text-align:center}" +
       ".pv-table{width:100%;border-collapse:collapse;font-size:11px}" +
       ".pv-table th{background:#17283B;color:#fff;padding:5px 4px;border:1px solid #aaa}" +
       ".pv-table td{border:1px solid #ccc;padding:3px 5px}.center{text-align:center}" +
+      ".sc-report-signature{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:20px;font-size:12px}.sc-sign-box{min-width:56px;text-align:center;border-bottom:1px solid #777;padding:3px 6px}" +
+      ".sc-photo-appendix{margin-top:0}.sc-photo-page{page-break-before:always;break-before:page;padding-top:2mm}" +
+      ".sc-photo-page-title{font-size:16px;font-weight:700;margin-bottom:6mm}.sc-photo-report-item{margin:0}.sc-photo-report-label{font-size:11px;font-weight:700;margin-bottom:3mm}" +
+      ".sc-photo-report-details{display:grid;grid-template-columns:30mm 1fr;margin:0 0 5mm;border-top:1px solid #aaa;border-left:1px solid #aaa;font-size:9pt;line-height:1.45}" +
+      ".sc-photo-report-details dt,.sc-photo-report-details dd{margin:0;padding:2.2mm 2.5mm;border-right:1px solid #aaa;border-bottom:1px solid #aaa}.sc-photo-report-details dt{background:#edf4ff;font-weight:700}.sc-photo-report-details dd{white-space:pre-wrap}" +
+      ".sc-photo-report-image{display:block;width:100%;height:130mm;object-fit:contain;border:1px solid #bbb}" +
       smartPrintCreditCss() +
       "</style></head><body>" +
       body.innerHTML + "</body></html>");
     w.document.close();
-    setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, UI_TIMING.printOpenDelayMs);
+    var printed = false;
+    function doPrint() {
+      if (printed) return;
+      printed = true;
+      setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, UI_TIMING.printOpenDelayMs);
+    }
+    var printImages = Array.prototype.slice.call(w.document.images || []);
+    if (!printImages.length || printImages.every(function (img) { return img.complete; })) {
+      doPrint();
+    } else {
+      var remain = printImages.length;
+      printImages.forEach(function (img) {
+        function settled() { remain--; if (remain <= 0) doPrint(); }
+        if (img.complete) settled();
+        else { img.addEventListener("load", settled, { once: true }); img.addEventListener("error", settled, { once: true }); }
+      });
+      setTimeout(doPrint, 2500);
+    }
   }
 
   function openPdfActionModal(pack, opts) {
@@ -14083,13 +14707,13 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var firstDeadline = firstBadDeadline();
     var savedOnce = false;
     var emailedOnce = false;
-    var ra = isRaMode();
     var fromPreview = !!(opts && opts.fromPreview);
 
     var h = '<div class="modal-back"><div class="modal-box" role="dialog" aria-modal="true">' +
-      '<div class="modal-title">' + (ra ? "문서 확정" : "PDF를 만들었습니다") + "</div>" +
-      (ra ? '<p class="report-meta">메일로 보내거나 PDF로 저장·인쇄하세요.</p>' : "") +
+      '<div class="modal-title">문서 확정</div>' +
+      '<p class="report-meta">메일로 보내거나 PDF를 생성·인쇄하세요.</p>' +
       '<div class="report-meta"><b>파일</b> ' + esc(fname) + "</div>" +
+      (pack.photoCount ? '<div class="report-meta"><b>사진 첨부</b> 불량 사진 ' + pack.photoCount + '장 포함</div>' : "") +
       (firstDeadline ? '<div class="report-meta"><b>조치기한</b> ' + esc(firstDeadline) + "</div>" : "") +
       '<div class="form-group" style="margin-top:14px">' +
       "<label>메일 주소</label>" +
@@ -14098,7 +14722,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<div id="pdf-action-status" class="pdf-action-status"></div>' +
       '<div class="modal-actions pdf-action-actions">' +
       '<button type="button" class="mobile-btn-primary" id="pdf-email-send"><span class="pdf-action-emoji" aria-hidden="true">📧</span>메일로 보내기</button>' +
-      '<button type="button" class="mobile-btn-primary" id="pdf-save"><span class="pdf-action-emoji" aria-hidden="true">💾</span>PDF 저장</button>' +
+      '<button type="button" class="mobile-btn-primary" id="pdf-save"><span class="pdf-action-emoji" aria-hidden="true">💾</span>PDF 생성</button>' +
       '<button type="button" class="mobile-btn-primary" id="pdf-print"><span class="pdf-action-emoji" aria-hidden="true">🖨️</span>인쇄</button>' +
       '<button type="button" class="mobile-btn-secondary" id="pdf-back">뒤로가기</button>' +
       "</div></div></div>";
@@ -14220,16 +14844,27 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   }
 
   function renderTypes() {
-    var html = renderNavSearchToolbar('<button type="button" class="btn-link" id="btn-search">조문 찾기</button>');
+    var html = '<section class="home-screen">' +
+      '<div class="home-hero">' +
+      '<div class="home-hero-kicker">SMART SAFETY WORKSPACE</div>' +
+      '<h1>현장 안전업무를 선택하세요</h1>' +
+      '<p>위험성평가부터 법령 기준 안전점검과 보고서 출력까지 한 화면에서 이어집니다.</p>' +
+      '</div>' +
+      '<div class="home-tools">' + renderNavSearchToolbar('<button type="button" class="btn-link" id="btn-search">조문 찾기</button>') + '</div>' +
+      '<div class="home-type-grid">';
     getVisibleTypes().forEach(function (t) {
       var dis = t.status === "preparing" ? " disabled" : "";
       var searchBlob = [t.type_name, t.type_desc || ""].join(" ");
-      html += '<div class="nav-card' + dis + '" data-nav="type" data-id="' + esc(t.type_id) + '" data-search="' + esc(searchBlob) + '">' +
-        '<div class="nav-card-title">' + esc(t.type_name) +
+      var isRa = t.type_id === "RA";
+      var detail = isRa ? "빈도·강도 산정부터 안전대책과 문서확정까지" : "공종별 점검부터 조치사항과 보고서 출력까지";
+      html += '<button type="button" class="nav-card home-type-card ' + (isRa ? "home-type-ra" : "home-type-sc") + dis + '" data-nav="type" data-id="' + esc(t.type_id) + '" data-search="' + esc(searchBlob) + '">' +
+        '<span class="nav-card-title">' + esc(t.type_name) +
         (t.status === "preparing" ? '<span class="badge-preparing">준비 중</span>' : '') +
-        '</div><div class="nav-card-desc">' + esc(t.type_desc || "") + '</div></div>';
+        '</span><span class="nav-card-desc">' + esc(t.type_desc || "") + '</span>' +
+        '<span class="home-type-detail">' + esc(detail) + '</span>' +
+        '<span class="home-type-action">업무 시작 →</span></button>';
     });
-    html += '<div id="nav-search-empty" class="nav-search-empty hidden">검색 결과가 없습니다</div>';
+    html += '</div><div id="nav-search-empty" class="nav-search-empty hidden">검색 결과가 없습니다</div></section>';
     return html;
   }
 
@@ -14238,30 +14873,11 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     if (!t) return "";
     var html = renderNavSearchToolbar("");
 
-    /* 안전점검: 위험성평가와 동일 — 공종 다중선택 후 점검 */
+    /* 안전점검은 구형 그룹 화면을 사용하지 않고 비활성 규칙이 적용된 전용 2단계로 통합 */
     if (isScCategoryMulti()) {
-      var selected = getSelectedGroupIds();
-      html += '<div class="select-hint">공종을 선택한 뒤 하단 버튼으로 점검을 시작하세요</div>';
-      (t.groups || []).forEach(function (g) {
-        if (g.status === "preparing") return;
-        var ids = collectItemIds(g);
-        var p = countProgress(ids);
-        var on = selected.indexOf(g.group_id) >= 0;
-        var searchBlob = [g.group_name, g.site_label || ""].join(" ");
-        html += '<div class="nav-card' + (on ? " selected" : "") + '" data-group-toggle="' + esc(g.group_id) + '" data-search="' + esc(searchBlob) + '">' +
-          '<div class="nav-card-title">' + esc(g.group_name) +
-          (on ? '<span class="badge-selected">선택</span>' : "") +
-          "</div>" +
-          (g.site_label ? '<div class="nav-card-desc">' + esc(g.site_label) + "</div>" : "") +
-          '<div class="nav-card-progress">점검항목 <b>' + p.judged + "/" + p.total + "</b></div></div>";
-      });
-      html += '<div id="nav-search-empty" class="nav-search-empty hidden">검색 결과가 없습니다</div>';
-      var n = selected.length;
-      var itemN = getCurrentItemIds().length;
-      html += '<div class="subs-cta-wrap"><button type="button" class="btn-primary" id="btn-groups-go"' +
-        (n ? "" : " disabled") + ">선택한 분류로 점검" +
-        (n ? " (" + n + "개 · " + itemN + "항목)" : "") + "</button></div>";
-      return html;
+      state.screen = "sc-input";
+      state.scStep = 2;
+      return renderScInput();
     }
 
     (t.groups || []).forEach(function (g) {
@@ -14331,7 +14947,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   function renderChecklist() {
     var itemIds = getCurrentItemIds();
     var ra = isRaItemIds(itemIds);
-    var html = renderChecklistStickyHead(itemIds);
+    var scLive = !ra && state.typeId === "SC" && !state.historyView;
+    if (scLive) state.scStep = 3;
+    var html = scLive ? '<div class="mobile-screen sc-mobile-screen sc-checklist-screen">' + renderScStepper() +
+      '<h1 class="mobile-screen-title">현장 안전점검</h1>' +
+      '<p class="mobile-screen-sub">각 항목을 양호·불량·해당없음으로 확인하세요</p>' : "";
+    html += renderChecklistStickyHead(itemIds);
     html += '<div class="toolbar">' +
       '<label class="toggle-filter"><input type="checkbox" id="filter-unjudged"' + (state.filterUnjudged ? " checked" : "") + "> " +
       (ra ? "미점검만 보기" : "미점검만 보기") + "</label>" +
@@ -14403,12 +15024,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         var deadlineVal = normalizeDeadlineForInput(r.action_deadline || "");
         html += '<div class="action-block">' +
           '<label>조치요구</label><textarea data-field="action_text" data-id="' + esc(id) + '">' + esc(r.action_text || it.action_template || "") + "</textarea>" +
-          '<label>조치기한</label><input type="datetime-local" step="300" data-field="action_deadline" data-id="' + esc(id) + '" value="' + esc(deadlineVal) + '">' +
-          '<label>조치상태</label><select data-field="action_status" data-id="' + esc(id) + '">' +
-          '<option value="progress"' + (r.action_status === "progress" || !r.action_status ? " selected" : "") + ">조치중</option>" +
-          '<option value="done"' + (r.action_status === "done" ? " selected" : "") + ">조치완료</option>" +
-          '<option value="recheck"' + (r.action_status === "recheck" ? " selected" : "") + ">재점검완료</option>" +
-          '<option value="na"' + (r.action_status === "na" ? " selected" : "") + ">해당없음</option></select>" +
+          '<label>조치기한 <span style="color:#dc3545" aria-hidden="true">*</span></label><input type="date" required aria-required="true" data-field="action_deadline" data-id="' + esc(id) + '" value="' + esc(deadlineVal) + '">' +
           '<label>사진</label><div class="photo-row" data-photos="' + esc(id) + '">';
         (state.photos[id] || []).forEach(function (ph, pi) {
           html += '<div class="photo-wrap"><img class="photo-thumb" src="' + ph.thumb + '" alt=""><button type="button" class="photo-del" data-del-photo="' + esc(id) + '" data-pi="' + pi + '">×</button></div>';
@@ -14420,6 +15036,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       }
       html += "</div></div>";
     });
+    if (scLive) html += "</div>";
     return html;
   }
 
@@ -14528,16 +15145,20 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       if ((state.raStep || 1) > 1) return "ra-step-prev";
       return shouldAutoEnterRa() ? null : "types";
     }
-    if (state.screen === "sc-input") return shouldAutoEnterRa() ? null : "types";
+    if (state.screen === "sc-input") {
+      if ((state.scStep || 1) > 1) return "sc-step-prev";
+      /* 첫 단계에서는 초기화면 버튼과 기능이 겹치므로 별도 뒤로가기 미표시 */
+      return null;
+    }
     if (state.screen === "ra-result") return "ra-input";
     if (state.screen === "groups") return "types";
     if (state.screen === "subs") return "groups";
     if (state.screen === "checklist") {
-      if (isScCategoryMulti()) return "sc-input";
+      if (isScCategoryMulti()) return "sc-step-select";
       if (state.typeId === "RA") return "ra-input";
       return "subs";
     }
-    if (state.screen === "report") return "checklist";
+    if (state.screen === "report") return state.typeId === "SC" ? "sc-step-check" : "checklist";
     return null;
   }
 
@@ -14550,6 +15171,15 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     } else if (t === "ra-step-prev") {
       state.raStep = Math.max(1, (state.raStep || 1) - 1);
       state.screen = "ra-input";
+    } else if (t === "sc-step-prev") {
+      state.scStep = Math.max(1, (state.scStep || 1) - 1);
+      state.screen = "sc-input";
+    } else if (t === "sc-step-select") {
+      state.scStep = 2;
+      state.screen = "sc-input";
+    } else if (t === "sc-step-check") {
+      state.scStep = 3;
+      state.screen = "checklist";
     } else if (t === "types") {
       if (shouldAutoEnterRa()) {
         enterRaUx();
@@ -14609,14 +15239,20 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   function renderReport(readonly) {
     var itemIds = state.historyView ? state.historyView.itemIds : getCurrentItemIds();
     var results = state.historyView ? state.historyView.results : state.results;
+    var photos = state.historyView ? (state.historyView.photos || {}) : state.photos;
     var insp = state.historyView ? state.historyView.inspector : state.inspector;
     var ra = isRaItemIds(itemIds);
+    var scLive = !ra && !readonly && !state.historyView && state.typeId === "SC";
+    if (scLive) state.scStep = 4;
     var hasUnv = itemIds.some(function (id) {
       var it = ITEM_MAP[id];
       return it && it.standard_type === "법령" && !it.verified;
     });
 
-    var html = '<div class="report-panel">' +
+    var html = scLive ? '<div class="mobile-screen sc-mobile-screen sc-result-screen">' + renderScStepper() +
+      '<h1 class="mobile-screen-title">결과 확인</h1>' +
+      '<p class="mobile-screen-sub">점검 결과와 조치사항을 검토한 뒤 문서를 출력하세요</p>' : "";
+    html += '<div class="report-panel">' +
       '<div class="report-title">' + (ra ? "안전관리계획서 (위험성평가 포함)" : "점검 보고서") + "</div>" +
       '<div class="report-meta"><b>' + (ra ? "평가분야" : "점검분야") + "</b> " + esc(state.historyView ? state.historyView.path : getContextPath()) + "</div>" +
       (getSiteLabel() ? '<div class="report-meta"><b>현장</b> ' + esc(getSiteLabel()) + "</div>" : "") +
@@ -14649,17 +15285,19 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       html += '<div class="ra-legend">위험도 = 빈도×강도 | 상: 강도5 또는 10↑ | 중: 6~9 | 하: 1~5</div>';
     } else {
       html += '<div class="report-table-wrap"><table class="report-table"><thead><tr>' +
-        "<th>번호</th><th>점검사항</th><th>근거</th><th>양호</th><th>불량</th><th>해당없음</th><th>비고</th></tr></thead><tbody>";
+        "<th>번호</th><th>점검사항</th><th>법적 근거</th><th>내용</th><th>양호</th><th>불량</th><th>해당없음</th><th>비고</th></tr></thead><tbody>";
       itemIds.forEach(function (id, idx) {
         var it = ITEM_MAP[id];
         var r = results[id] || {};
         var j = r.judgment;
-        var basis = formatBasisText(it);
+        var legalBasis = formatLegalBasisText(it);
+        var basisContent = formatBasisContentText(it);
         var note = j === "bad" ? (r.action_text || "") : "";
         if (j === "bad" && r.action_deadline) note += " / 기한:" + formatDeadlineForText(r.action_deadline);
         html += "<tr><td>" + (idx + 1) + "</td>" +
           '<td class="txt-left">' + esc(it ? it.item_name : id) + "</td>" +
-          '<td class="txt-left">' + esc(basis) + "</td>" +
+          '<td class="txt-left">' + esc(legalBasis) + "</td>" +
+          '<td class="txt-left">' + esc(basisContent) + "</td>" +
           "<td>" + (j === "good" ? "O" : "") + "</td>" +
           "<td>" + (j === "bad" ? "O" : "") + "</td>" +
           "<td>" + (j === "na" ? "O" : "") + "</td>" +
@@ -14668,9 +15306,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       html += "</tbody></table></div>";
     }
     if (hasUnv) html += '<div class="report-note">※ 법령 조문 검증전 초안</div>';
-    html += '<div class="sign-line">(인)</div></div>';
+    html += ra ? '<div class="sign-line">(인)</div>' :
+      '<div class="sc-report-signature"><span>점검자</span><strong>' + esc(insp.inspector_name || "") + '</strong><span class="sc-sign-box">(서명)</span></div>';
+    html += '</div>';
+    if (!ra) html += buildScPhotoAppendixHTML(itemIds, results, photos);
 
-    if (!readonly && !state.historyView) {
+    if (!readonly && !state.historyView && !scLive) {
       html += '<button type="button" class="bottom-btn" id="btn-ra-preview" style="width:100%;margin-bottom:8px">출력 미리보기</button>';
       html += '<button type="button" class="bottom-btn bottom-btn-primary" id="btn-pdf-dl" style="width:100%;margin-bottom:8px">' +
         "PDF 만들기" + "</button>";
@@ -14679,6 +15320,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     if (readonly || state.historyView) {
       html += '<button type="button" class="btn-back" data-back="history" style="margin-top:12px">← 이력 목록</button>';
     }
+    if (scLive) html += "</div>";
     return html;
   }
 
@@ -14688,10 +15330,11 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var backBtn = document.getElementById("btn-nav-back");
     var reportBtn = document.getElementById("btn-report");
     var row2 = document.querySelector(".hdr-row2");
-    var isPlan =
-      state.screen === "ra-input" || state.screen === "ra-result" || state.screen === "sc-input";
+    var onScFlow = state.typeId === "SC" && (state.screen === "sc-input" || state.screen === "checklist" || state.screen === "report");
+    var isPlan = state.screen === "ra-input" || state.screen === "ra-result" || onScFlow;
+    document.body.classList.toggle("home-header", state.screen === "types" && !state.historyView);
     document.body.classList.toggle("ra-ux", !!isPlan || (state.typeId === "RA" && (state.screen === "ra-input" || state.screen === "ra-result")));
-    document.body.classList.toggle("sc-ux", state.screen === "sc-input" || (state.typeId === "SC" && state.screen === "checklist"));
+    document.body.classList.toggle("sc-ux", onScFlow);
     if (!isPlan && state.screen !== "checklist") {
       document.body.classList.remove("ra-ux");
       document.body.classList.remove("sc-ux");
@@ -14700,12 +15343,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       document.body.classList.add("ra-ux");
       document.body.classList.remove("sc-ux");
     }
-    if (state.screen === "sc-input") {
+    if (onScFlow) {
       document.body.classList.add("ra-ux");
       document.body.classList.add("sc-ux");
     }
     document.body.classList.remove("has-subs-cta");
-    if (state.screen === "checklist" && !state.readonly && !state.historyView) {
+    if (state.screen === "checklist" && !state.readonly && !state.historyView && state.typeId !== "SC") {
       bar.classList.remove("hidden");
       document.body.classList.remove("no-bottom-pad");
       if (reportBtn) {
@@ -14779,6 +15422,13 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   function bindMainEvents() {
     var main = document.getElementById("app-main");
 
+    main.querySelectorAll("[data-sc-step]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var step = Number(btn.getAttribute("data-sc-step")) || 1;
+        if (step !== ensureScStep()) goScStep(step);
+      });
+    });
+
     main.querySelectorAll("[data-nav]").forEach(function (el) {
       el.addEventListener("click", function () {
         var nav = el.getAttribute("data-nav");
@@ -14821,6 +15471,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     main.querySelectorAll("[data-group-toggle]").forEach(function (el) {
       el.addEventListener("click", function () {
         var id = el.getAttribute("data-group-toggle");
+        if (state.typeId === "SC" && isScGroupDisabled(id)) return;
         var arr = getSelectedGroupIds();
         var i = arr.indexOf(id);
         if (i >= 0) arr.splice(i, 1);
@@ -14913,7 +15564,6 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         if (j === "bad") {
           var it = ITEM_MAP[id];
           if (!state.results[id].action_text && it) state.results[id].action_text = it.action_template || "";
-          if (!state.results[id].action_status) state.results[id].action_status = "progress";
         }
         debounceSave();
         render();
@@ -14939,6 +15589,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
           render();
           return;
         }
+        if (f === "action_deadline") updateMobileActionBar();
         debounceSave();
       });
       el.addEventListener("input", function () {
@@ -14975,15 +15626,19 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         inp.type = "file";
         inp.accept = "image/*";
         inp.capture = "environment";
+        inp.hidden = true;
+        inp.setAttribute("data-photo-input", id);
+        document.body.appendChild(inp);
+        inp.addEventListener("cancel", function () { inp.remove(); }, { once: true });
         inp.addEventListener("change", function () {
           var f = inp.files && inp.files[0];
-          if (!f) return;
+          if (!f) { inp.remove(); return; }
           resizePhoto(f).then(function (ph) {
             if (!state.photos[id]) state.photos[id] = [];
             state.photos[id].push(ph);
             debounceSave();
             render();
-          }).catch(function () { toast("사진 처리 실패"); });
+          }).catch(function () { toast("사진 처리 실패"); }).then(function () { inp.remove(); });
         });
         inp.click();
       });
@@ -15925,9 +16580,9 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var bar = document.getElementById("mobile-action-bar");
     if (!bar) return;
     var onRa = state.screen === "ra-input" || state.screen === "ra-result";
-    var onSc = state.screen === "sc-input";
+    var onSc = state.typeId === "SC" && (state.screen === "sc-input" || state.screen === "checklist" || state.screen === "report");
     document.body.classList.toggle("has-mobile-action", !!onRa || !!onSc);
-    document.body.classList.toggle("ra-mockup", !!onRa);
+    document.body.classList.toggle("ra-mockup", !!onRa || !!onSc);
     if (!onRa && !onSc) {
       bar.classList.add("hidden");
       return;
@@ -15937,24 +16592,40 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var btns = document.getElementById("mobile-action-buttons");
     if (!btns) return;
     if (onSc) {
-      var scSelected = getSelectedGroupIds();
-      var scItemN = getCurrentItemIds().length;
+      var scStep = ensureScStep();
+      var scSelected = getScActiveSelectedGroupIds();
+      var scProg = scProgress();
       if (sum) sum.innerHTML = "";
-      btns.innerHTML = '<button type="button" class="mobile-btn-success" id="mab-sc-start"' +
-        (scSelected.length ? "" : " disabled") + ">선택한 공종으로 점검 시작" +
-        (scSelected.length ? " (" + scSelected.length + "개 · " + scItemN + "항목)" : "") + "</button>";
+      if (state.screen === "report" || scStep === 4) {
+        btns.innerHTML = '<button type="button" class="mobile-btn-success" id="mab-sc-preview">' + smartSvg("search", 16) + ' 구성내용 검토</button>';
+      } else if (state.screen === "checklist" || scStep === 3) {
+        var remain = Math.max(0, scProg.total - scProg.judged);
+        var missingDeadlines = getScMissingDeadlineIds().length;
+        var scBlocked = remain > 0 || missingDeadlines > 0;
+        var scResultLabel = remain ? "미점검 " + remain + "건" : missingDeadlines ? "조치기한 " + missingDeadlines + "건 입력 필요" : "결과 확인";
+        btns.innerHTML = '<button type="button" class="mobile-btn-primary" id="mab-sc-result"' +
+          (scBlocked ? " disabled" : "") + '>' + scResultLabel + '</button>';
+      } else if (scStep === 1) {
+        btns.innerHTML = '<button type="button" class="mobile-btn-primary" id="mab-sc-next">다음 단계로 ' + smartSvg("next", 16) + '</button>';
+      } else {
+        var scHasItems = scSelected.length > 0 && getCurrentItemIds().length > 0;
+        btns.innerHTML = '<button type="button" class="mobile-btn-success" id="mab-sc-start"' +
+          (scHasItems ? "" : " disabled") + '>안전점검 시작' +
+          (scHasItems ? " (" + scSelected.length + "개)" : "") + '</button>';
+      }
+      var scNext = btns.querySelector("#mab-sc-next");
       var scStart = btns.querySelector("#mab-sc-start");
-      if (scStart) scStart.addEventListener("click", function () {
-        var main = document.getElementById("app-main");
-        syncPlanInspectorFromForm(main);
-        if (!getSelectedGroupIds().length) { toast("공종을 1개 이상 선택해주세요."); return; }
-        if (!(state.inspector.inspector_name || "").trim()) { toast("점검자를 입력하세요."); return; }
-        saveAll(true);
-        screenTransition(function () {
-          state.screen = "checklist";
-          state.listSearchQ = "";
-        });
+      var scResult = btns.querySelector("#mab-sc-result");
+      var scPreview = btns.querySelector("#mab-sc-preview");
+      if (scNext) scNext.addEventListener("click", function () {
+        syncPlanInspectorFromForm(document.getElementById("app-main"));
+        if (!String(state.inspector.project || "").trim()) { toast("공사명을 입력하세요."); return; }
+        if (!String(state.inspector.inspector_name || "").trim()) { toast("점검자를 입력하세요."); return; }
+        goScStep(2);
       });
+      if (scStart) scStart.addEventListener("click", function () { goScStep(3); });
+      if (scResult) scResult.addEventListener("click", function () { goScStep(4); });
+      if (scPreview) scPreview.addEventListener("click", function () { showRaPreview(); });
       return;
     }
     var step = ensureRaStep();
@@ -16105,7 +16776,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
 
   /* 진행 중 업무 배너 — 위험성평가/안전점검 화면 구성이 비슷해 헷갈리지 않도록
      초기화면 내비게이션 바로 아래에 항상 크게 표시한다. */
-  var ACTIVE_MODE_BANNER_SCREENS = { "ra-input": 1, "ra-result": 1, "sc-input": 1, "checklist": 1 };
+  var ACTIVE_MODE_BANNER_SCREENS = { "ra-input": 1, "ra-result": 1, "sc-input": 1, "checklist": 1, "report": 1 };
   function renderActiveModeBanner() {
     var t = getType(state.typeId);
     if (!t) return "";
@@ -16141,8 +16812,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       el.classList.remove("hidden");
       if (label === "평가중") el.classList.add("is-eval");
       if (label === "검토완료") el.classList.add("is-done");
-    } else if (state.screen === "sc-input" || state.screen === "checklist") {
-      el.textContent = "구성 중";
+    } else if (state.typeId === "SC" && (state.screen === "sc-input" || state.screen === "checklist" || state.screen === "report")) {
+      var scLabel = state.screen === "report" ? "검토완료" : state.screen === "checklist" ? "점검중" : "임시저장";
+      el.textContent = scLabel;
+      el.classList.remove("hidden");
+      if (scLabel === "점검중") el.classList.add("is-eval");
+      if (scLabel === "검토완료") el.classList.add("is-done");
     } else {
       el.textContent = "대기";
     }
@@ -16311,64 +16986,165 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     return (t && t.groups) ? t.groups.filter(function (g) { return g.status !== "preparing"; }) : [];
   }
 
+  var SC_UI_STEPS = [
+    { step: 1, label: "기본정보" },
+    { step: 2, label: "점검분류" },
+    { step: 3, label: "안전점검" },
+    { step: 4, label: "결과확인" }
+  ];
+  function ensureScStep() {
+    var n = Number(state.scStep) || 1;
+    if (state.typeId === "SC" && state.screen === "checklist") n = 3;
+    if (state.typeId === "SC" && state.screen === "report") n = 4;
+    if (n < 1) n = 1;
+    if (n > 4) n = 4;
+    state.scStep = n;
+    return n;
+  }
+  function scProgress() {
+    return countProgress(getCurrentItemIds());
+  }
+  function getScMissingDeadlineIds() {
+    return getCurrentItemIds().filter(function (id) {
+      var r = state.results[id] || {};
+      return r.judgment === "bad" && !String(r.action_deadline || "").trim();
+    });
+  }
+  function scStepDone(step) {
+    var insp = state.inspector || {};
+    if (step === 1) return !!String(insp.project || "").trim() && !!String(insp.inspector_name || "").trim() && !!insp.inspection_date;
+    if (step === 2) return getScActiveSelectedGroupIds().length > 0 && getCurrentItemIds().length > 0;
+    if (step === 3) {
+      var p = scProgress();
+      return p.total > 0 && p.judged >= p.total && getScMissingDeadlineIds().length === 0;
+    }
+    return state.typeId === "SC" && state.screen === "report";
+  }
+  function canGoScStep(step) {
+    step = Number(step) || 1;
+    if (step <= 1) return true;
+    if (step === 2) return scStepDone(1);
+    if (step === 3) return scStepDone(1) && scStepDone(2);
+    return scStepDone(1) && scStepDone(2) && scStepDone(3);
+  }
+  function goScStep(step) {
+    step = Math.max(1, Math.min(4, Number(step) || 1));
+    syncPlanInspectorFromForm(document.getElementById("app-main"));
+    if (!canGoScStep(step)) {
+      var missingDeadlines = step === 4 ? getScMissingDeadlineIds() : [];
+      toast(step === 2 ? "기본정보를 먼저 입력해 주세요." : step === 3 ? "점검분류를 1개 이상 선택해 주세요." : missingDeadlines.length ? "불량 항목의 조치기한을 모두 입력해 주세요." : "미점검 항목을 모두 확인해 주세요.");
+      return;
+    }
+    state.scStep = step;
+    state.screen = step <= 2 ? "sc-input" : (step === 3 ? "checklist" : "report");
+    state.filterUnjudged = false;
+    saveAll(true);
+    screenTransition(null, function () { scrollRaScreenTop(); });
+  }
+  function renderScStepper() {
+    var step = ensureScStep();
+    var html = '<div class="mobile-stepper"><div class="mobile-stepper-track">';
+    SC_UI_STEPS.forEach(function (s, idx) {
+      var current = step === s.step;
+      var done = s.step < step;
+      if (idx) html += '<span class="mobile-step-line' + (done || current ? " is-active" : "") + '" aria-hidden="true"></span>';
+      html += '<button type="button" class="mobile-step' + (current ? " is-current" : done ? " is-done" : "") + '" data-sc-step="' + s.step + '"' +
+        (!canGoScStep(s.step) ? " disabled" : "") + ' aria-label="' + esc(s.label) + '">' +
+        '<span class="mobile-step-num' + (done ? " is-check" : "") + '">' + (done ? "" : s.step) + '</span>' +
+        '<span class="mobile-step-label">' + esc(s.label) + '</span></button>';
+    });
+    return html + '</div></div>';
+  }
+  function scCategoryIconKey(name) {
+    var n = String(name || "");
+    if (n.indexOf("가설") >= 0) return "icoScaffold";
+    if (n.indexOf("추락") >= 0 || n.indexOf("통로") >= 0 || n.indexOf("낙하") >= 0) return "icoFall";
+    if (n.indexOf("굴착") >= 0 || n.indexOf("중장비") >= 0) return "icoHeavy";
+    if (n.indexOf("양중") >= 0) return "icoCrane";
+    if (n.indexOf("용접") >= 0 || n.indexOf("화기") >= 0) return "icoWeld";
+    if (n.indexOf("전기") >= 0) return "icoElectric";
+    if (n.indexOf("밀폐") >= 0) return "icoConfined";
+    if (n.indexOf("보호구") >= 0) return "icoHealth";
+    return "icoProcess";
+  }
+
   function enterScUx() {
     state.typeId = "SC";
     state.screen = "sc-input";
+    state.scStep = 1;
+    state.groupId = null;
+    state.groupIds = [];
     state.subId = null;
     state.subIds = [];
+    state.scSelectedSubs = {};
     state.listSearchQ = "";
     state.raSearchQ = state.raSearchQ || "";
-    if (!Array.isArray(state.groupIds)) state.groupIds = [];
     document.body.classList.add("ra-ux");
     document.body.classList.add("sc-ux");
   }
 
   function renderScInput() {
     if (!state.inspector.inspection_date) state.inspector.inspection_date = todayStr();
+    var step = ensureScStep();
+    if (step < 1 || step > 2) step = state.scStep = 1;
+    if (step === 1) {
+      var html1 = '<div class="mobile-screen sc-mobile-screen">' + renderScStepper();
+      html1 += '<h1 class="mobile-screen-title">기본정보 입력</h1>';
+      html1 += '<p class="mobile-screen-sub">안전점검표에 표시할 현장 정보를 입력하세요</p>';
+      html1 += '<div class="mobile-form-card">';
+      html1 += '<div class="mobile-field"><label>공사명 <span class="req-mark">*</span></label><div class="mobile-field-row"><input type="text" id="sc-inp-gongsa" value="' + esc(state.inspector.project || "") + '" placeholder="공사명을 입력하세요"></div></div>';
+      html1 += '<div class="mobile-field"><label>시공업체</label><div class="mobile-field-row"><input type="text" id="sc-inp-upche" value="' + esc(state.inspector.partner || "") + '" placeholder="시공업체명을 입력하세요"></div></div>';
+      html1 += '<div class="mobile-field"><label>점검일 <span class="req-mark">*</span></label><div class="mobile-field-row">' + smartSvg("calendar", 18) + '<input type="date" id="sc-inp-date" value="' + esc(state.inspector.inspection_date || todayStr()) + '"></div></div>';
+      html1 += '<div class="mobile-field"><label>점검자 <span class="req-mark">*</span></label><div class="mobile-field-row">' + smartSvg("person", 18) + '<input type="text" id="sc-inp-writer" value="' + esc(state.inspector.inspector_name || "") + '" placeholder="점검자 성명을 입력하세요"></div></div>';
+      return html1 + '</div></div>';
+    }
     var groups = getScGroups();
     var q = (state.raSearchQ || "").trim();
-    var selected = getSelectedGroupIds();
+    var selected = getScActiveSelectedGroupIds();
+    if (selected.length !== getSelectedGroupIds().length) {
+      state.groupIds = selected.slice();
+      state.groupId = selected[0] || null;
+    }
     var filtered = groups.filter(function (g) {
       if (!q) return true;
       return (g.group_name || "").indexOf(q) >= 0 || (g.site_label || "").indexOf(q) >= 0;
     });
 
-    var html = '<div class="smart-shell"><div class="smart-work" style="grid-column:1/-1"><div class="smart-document-sheet">';
-    html += '<div class="smart-document-head"><div>' +
-      '<div class="smart-document-code">SC-01 · 점검정보</div>' +
-      '<div class="smart-document-title">현장 안전점검</div>' +
-      '<div class="smart-document-desc">법령 기준 체크리스트 · 양호 / 불량 / 해당없음</div></div>' +
-      '<div class="smart-document-flag">구성 중</div></div><div class="smart-document-body">';
-
-    html += '<div class="smart-section-heading">SC-01 점검정보</div><div class="smart-form-grid ra-input-grid">';
-    html += '<div class="smart-field ra-input-group"><label>공사명 <span class="req-mark">※</span></label><input type="text" id="sc-inp-gongsa" value="' + esc(state.inspector.project || "") + '"></div>';
-    html += '<div class="smart-field ra-input-group"><label>시공업체</label><input type="text" id="sc-inp-upche" value="' + esc(state.inspector.partner || "") + '"></div>';
-    html += '<div class="smart-field ra-input-group"><label>점검일</label><input type="date" id="sc-inp-date" value="' + esc(state.inspector.inspection_date || todayStr()) + '"></div>';
-    html += '<div class="smart-field ra-input-group"><label>점검자 <span class="req-mark">※</span></label><input type="text" id="sc-inp-writer" value="' + esc(state.inspector.inspector_name || "") + '"></div>';
-    html += "</div>";
-
-    html += '<div class="smart-section-heading" style="margin-top:18px">SC-02 공종선택</div>';
-    html += '<input type="search" id="sc-search" class="smart-search ra-search" placeholder="공종명 검색" value="' + esc(state.raSearchQ || "") + '" aria-label="공종 검색">';
-    html += '<div class="smart-process-list" style="margin-top:10px">';
+    var html = '<div class="mobile-screen sc-mobile-screen">' + renderScStepper();
+    html += '<h1 class="mobile-screen-title">점검분류 선택</h1>';
+    html += '<p class="mobile-screen-sub">대분류를 연 뒤 점검할 중분류를 직접 선택하세요. 중분류는 자동 선택되지 않습니다.</p>';
+    html += '<div class="mobile-toolbar"><label class="mobile-search-wrap">' + smartSvg("search", 18) +
+      '<input type="search" id="sc-search" class="smart-search" placeholder="점검분류 검색" value="' + esc(state.raSearchQ || "") + '" aria-label="점검분류 검색"></label></div>';
+    var activeGroupCount = groups.filter(function (g) { return !isScGroupDisabled(g.group_id); }).length;
+    html += '<div class="mobile-sel-summary">선택 분류 ' + selected.length + ' / ' + activeGroupCount + ' · 비활성 ' + (groups.length - activeGroupCount) + ' · 점검항목 ' + getCurrentItemIds().length + '건</div>';
+    html += '<div class="mobile-process-grid sc-category-grid">';
     filtered.forEach(function (g, idx) {
-      var ids = collectItemIds(g);
+      var disabled = isScGroupDisabled(g.group_id);
+      var ids = disabled ? [] : getScItemIdsForGroup(g.group_id);
       var active = selected.indexOf(g.group_id) >= 0;
       var p = countProgress(ids);
-      html += '<button type="button" class="smart-process-sheet' + (active ? " is-selected" : "") + '" data-sc-cat="' + esc(g.group_id) + '">' +
-        '<div class="smart-process-top"><span class="smart-process-no">' + String(idx + 1).padStart(2, "0") + "</span>" +
-        '<span class="smart-process-count">' + p.judged + "/" + p.total + "</span></div>" +
-        '<div class="smart-process-name">' + esc(g.group_name) + "</div>" +
-        '<div class="smart-process-foot"><span>' + (active ? "적용" : "미적용") + "</span><span>선택</span></div></button>";
+      var ico = scCategoryIconKey(g.group_name);
+      html += '<div class="mobile-process-card' + (active ? " mobile-process-card-selected" : "") + (disabled ? " is-disabled" : "") + '">' +
+        '<span class="mobile-process-check" aria-hidden="true">' + (disabled ? '<span class="sc-disabled-mark">비활성</span>' : active ? '<span class="mobile-check-on"></span>' : '<span class="mobile-check-empty"></span>') + '</span>' +
+        '<button type="button" class="mobile-process-body" data-sc-cat="' + esc(g.group_id) + '"' + (disabled ? " disabled aria-disabled=\"true\"" : "") + ' aria-pressed="' + (active ? "true" : "false") + '" aria-label="' + (disabled ? "비활성: " : active ? "선택 해제: " : "선택: ") + esc(g.group_name) + '">' +
+        '<span class="mobile-process-ico" data-ico="' + ico + '">' + processPictogram(ico) + '</span>' +
+        '<span class="mobile-process-name">' + esc(g.group_name) + '</span>' +
+        '<span class="mobile-process-count">' + (disabled ? "현재 선택 불가" : p.judged + '/' + p.total + ' 점검') + '</span></button></div>';
+      if (active && !disabled && (g.subs || []).length) {
+        var selectedSubs = getScSelectedSubIds(g.group_id);
+        html += '<section class="sc-subcategory-panel" aria-label="' + esc(g.group_name) + ' 중분류">' +
+          '<div class="sc-subcategory-head"><div><strong>' + esc(g.group_name) + ' 중분류</strong><small>점검할 항목을 직접 선택하세요</small></div><span>' + selectedSubs.length + ' / ' + g.subs.length + ' 선택</span></div>' +
+          '<div class="sc-subcategory-list">';
+        g.subs.forEach(function (sub) {
+          if (sub.status === "preparing") return;
+          var subOn = selectedSubs.indexOf(sub.sub_id) >= 0;
+          html += '<button type="button" class="sc-subcategory-chip' + (subOn ? " is-selected" : "") + '" data-sc-group="' + esc(g.group_id) + '" data-sc-sub="' + esc(sub.sub_id) + '" aria-pressed="' + (subOn ? "true" : "false") + '">' + esc(sub.sub_name) + '<span>' + collectItemIds(sub).length + '건</span></button>';
+        });
+        html += '</div></section>';
+      }
     });
     if (!filtered.length) html += '<div class="smart-empty">검색 결과가 없습니다</div>';
-    html += "</div>";
-
-    var itemN = getCurrentItemIds().length;
-    html += '<div class="smart-footer-actions"><button type="button" class="smart-btn-primary ra-gen-btn" id="sc-gen-btn"' + (selected.length ? "" : " disabled") + ">" +
-      "선택한 공종으로 점검 시작" +
-      (selected.length ? " (" + selected.length + "개 · " + itemN + "항목)" : "") +
-      "</button></div></div></div></div></div>";
-    return html;
+    return html + '</div></div>';
   }
 
   function bindRaUx(main) {
@@ -16701,10 +17477,16 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       btn.addEventListener("click", function () {
         syncPlanInspectorFromForm(main);
         var id = btn.getAttribute("data-sc-cat");
-        var arr = getSelectedGroupIds();
+        if (isScGroupDisabled(id)) return;
+        var arr = getScActiveSelectedGroupIds();
         var i = arr.indexOf(id);
-        if (i >= 0) arr.splice(i, 1);
-        else arr.push(id);
+        if (i >= 0) {
+          arr.splice(i, 1);
+          delete state.scSelectedSubs[id];
+        } else {
+          arr.push(id);
+          state.scSelectedSubs[id] = [];
+        }
         state.groupIds = arr;
         state.groupId = arr.length === 1 ? arr[0] : (arr[0] || null);
         state.subIds = [];
@@ -16713,11 +17495,28 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
         render();
       });
     });
+    main.querySelectorAll("[data-sc-sub]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var gid = btn.getAttribute("data-sc-group");
+        var sid = btn.getAttribute("data-sc-sub");
+        if (!gid || !sid || isScGroupDisabled(gid)) return;
+        var selectedSubs = getScSelectedSubIds(gid);
+        var idx = selectedSubs.indexOf(sid);
+        if (idx >= 0) {
+          selectedSubs.splice(idx, 1);
+        } else {
+          selectedSubs.push(sid);
+        }
+        state.scSelectedSubs[gid] = selectedSubs;
+        debounceSave();
+        render();
+      });
+    });
     var gen = main.querySelector("#sc-gen-btn");
     if (gen) {
       gen.addEventListener("click", function () {
         syncPlanInspectorFromForm(main);
-        if (!getSelectedGroupIds().length) { toast("공종을 1개 이상 선택해주세요."); return; }
+        if (!getScActiveSelectedGroupIds().length || !getCurrentItemIds().length) { toast("점검분류와 중분류를 1개 이상 선택해 주세요."); return; }
         if (!(state.inspector.inspector_name || "").trim()) { toast("점검자를 입력하세요."); return; }
         saveAll(true);
         screenTransition(function () {
@@ -17373,7 +18172,8 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       if (j === "bad" && r.action_deadline) note += " / 기한:" + formatDeadlineForText(r.action_deadline);
       rows += "<tr><td class=\"center\">" + (idx + 1) + "</td>" +
         "<td>" + esc(it ? it.item_name : id) + "</td>" +
-        "<td>" + esc(formatBasisText(it)) + "</td>" +
+        "<td>" + esc(formatLegalBasisText(it)) + "</td>" +
+        "<td>" + esc(formatBasisContentText(it)) + "</td>" +
         "<td class=\"center\">" + (j === "good" ? "O" : "") + "</td>" +
         "<td class=\"center\">" + (j === "bad" ? "O" : "") + "</td>" +
         "<td class=\"center\">" + (j === "na" ? "O" : "") + "</td>" +
@@ -17388,10 +18188,12 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       '<tr><td class="lbl">공사명</td><td>' + esc(insp.project || "") + '</td><td class="lbl">협력사</td><td>' + esc(insp.partner || "") + "</td></tr>" +
       '<tr><td class="lbl">점검자</td><td>' + esc(insp.inspector_name || "") + '</td><td class="lbl">점검일</td><td>' + esc(insp.inspection_date || "") + "</td></tr>" +
       "</table>" +
-      '<table class="pv-table"><thead><tr>' +
-      '<th style="width:6%">No.</th><th style="width:22%">점검사항</th><th style="width:28%">근거</th>' +
-      '<th style="width:7%">양호</th><th style="width:7%">불량</th><th style="width:8%">해당없음</th><th style="width:22%">비고</th>' +
-      "</tr></thead><tbody>" + rows + "</tbody></table>" +
+      '<div class="sc-preview-table-wrap"><table class="pv-table"><thead><tr>' +
+      '<th style="width:5%">No.</th><th style="width:18%">점검사항</th><th style="width:18%">법적 근거</th><th style="width:24%">내용</th>' +
+      '<th style="width:6%">양호</th><th style="width:6%">불량</th><th style="width:7%">해당없음</th><th style="width:16%">비고</th>' +
+      "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
+      '<div class="sc-report-signature"><span>점검자</span><strong>' + esc(insp.inspector_name || "") + '</strong><span class="sc-sign-box">(서명)</span></div>' +
+      buildScPhotoAppendixHTML(itemIds, state.results, state.photos) +
       smartPreviewCreditHtml();
   }
 
@@ -17419,8 +18221,8 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       body.innerHTML = state._pvMode === "print" ? buildRaPreviewHTML() : buildRaMobilePreviewHTML();
     } else {
       if (modes) modes.hidden = true;
-      if (mbar) mbar.hidden = true;
-      if (tbr) tbr.style.display = "";
+      if (mbar) mbar.hidden = !isPhonePreview();
+      if (tbr) tbr.style.display = isPhonePreview() ? "none" : "";
       body.classList.remove("pv-print-mode");
       body.innerHTML = ra ? buildRaPreviewHTML() : buildScPreviewHTML();
     }
