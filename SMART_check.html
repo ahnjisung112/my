@@ -18197,6 +18197,42 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       smartPreviewCreditHtml();
   }
 
+  function scJudgeBadgeHtml(j) {
+    if (j === "good") return '<span class="mobile-count-chip is-low">양호</span>';
+    if (j === "bad") return '<span class="mobile-count-chip is-high">불량</span>';
+    if (j === "na") return '<span class="mobile-count-chip is-total">해당없음</span>';
+    return '<span class="mobile-count-chip is-unset">미점검</span>';
+  }
+
+  function buildScMobilePreviewHTML() {
+    var insp = state.inspector || {};
+    var itemIds = getCurrentItemIds();
+    var html = '<div class="mobile-pv">' +
+      '<div class="mobile-form-card"><div class="pv-kicker">SMART / SAFETY CHECK</div>' +
+      "<h2>안전점검 보고서</h2>" +
+      (getSiteLabel() ? "<p><b>현장</b> " + esc(getSiteLabel()) + "</p>" : "") +
+      "<p><b>공사명</b> " + esc(insp.project || "") + "</p>" +
+      (insp.partner ? "<p><b>협력사</b> " + esc(insp.partner) + "</p>" : "") +
+      "<p><b>점검</b> " + esc(insp.inspector_name || "") + " · " + esc(insp.inspection_date || "") + "</p></div>";
+    html += renderSummaryBar(itemIds);
+    html += '<div class="mobile-form-card">';
+    itemIds.forEach(function (id) {
+      var it = ITEM_MAP[id];
+      var r = state.results[id] || {};
+      var j = r.judgment;
+      var note = j === "bad" ? (r.action_text || "") : "";
+      if (j === "bad" && r.action_deadline) note += (note ? " / " : "") + "기한:" + formatDeadlineForText(r.action_deadline);
+      html += '<div class="mobile-pv-item">' +
+        '<div class="mobile-mini-row"><span class="mobile-mini-name"><b>' + esc(it ? it.item_name : id) + "</b></span>" +
+        '<span class="mobile-mini-meta">' + scJudgeBadgeHtml(j) + "</span></div>" +
+        (note ? '<div class="mobile-fi">' + esc(note) + "</div>" : "") +
+        "</div>";
+    });
+    html += "</div>";
+    html += smartPreviewCreditHtml() + "</div>";
+    return html;
+  }
+
   function showRaPreview() {
     var modal = document.getElementById("ra-preview-modal");
     var body = document.getElementById("ra-preview-body");
@@ -18208,7 +18244,7 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var mbar = document.getElementById("ra-preview-mobile-bar");
     var tbr = modal.querySelector(".tbr-btns");
     state._pvMode = state._pvMode || "mobile";
-    if (isPhonePreview() && ra) {
+    if (isPhonePreview()) {
       if (modes) {
         modes.hidden = false;
         modes.querySelectorAll("[data-pv-mode]").forEach(function (b) {
@@ -18218,7 +18254,9 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
       if (mbar) mbar.hidden = false;
       if (tbr) tbr.style.display = "none";
       body.classList.toggle("pv-print-mode", state._pvMode === "print");
-      body.innerHTML = state._pvMode === "print" ? buildRaPreviewHTML() : buildRaMobilePreviewHTML();
+      body.innerHTML = state._pvMode === "print"
+        ? (ra ? buildRaPreviewHTML() : buildScPreviewHTML())
+        : (ra ? buildRaMobilePreviewHTML() : buildScMobilePreviewHTML());
     } else {
       if (modes) modes.hidden = true;
       if (mbar) mbar.hidden = !isPhonePreview();
