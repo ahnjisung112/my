@@ -9382,6 +9382,51 @@ body.sc-ux.ra-ux .ra-hero-sc { display: none !important; }
     color: var(--smart-blue-700);
   }
 
+  /* 진행 중 업무 배너 — 위험성평가/안전점검 화면이 비슷해 보이지 않도록 구분 */
+  .active-mode-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 16px 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    color: #fff;
+  }
+  .active-mode-banner.mode-ra {
+    background: linear-gradient(135deg, var(--smart-blue-700), var(--smart-blue-900));
+  }
+  .active-mode-banner.mode-sc {
+    background: linear-gradient(135deg, var(--smart-green-700), var(--smart-green-800));
+  }
+  .active-mode-banner .amb-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .18);
+    flex-shrink: 0;
+  }
+  .active-mode-banner .amb-icon .smart-ico { color: #fff; }
+  .active-mode-banner .amb-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .active-mode-banner .amb-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: rgba(255, 255, 255, .78);
+  }
+  .active-mode-banner .amb-name {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+  }
+
   /* Mobile stepper — 시안: ①━②━③━④ + 라벨 */
   .mobile-stepper {
     background: #fff;
@@ -14720,6 +14765,9 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     } else if (state.screen === "report") {
       html = renderReport(false);
     }
+    if (!state.historyView && ACTIVE_MODE_BANNER_SCREENS[state.screen] && (state.typeId === "RA" || state.typeId === "SC")) {
+      html = renderActiveModeBanner() + html;
+    }
     main.innerHTML = html;
     updateChrome();
     bindMainEvents();
@@ -16053,6 +16101,19 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     };
     var p = paths[name] || paths.document;
     return '<span class="smart-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="none" stroke="currentColor" stroke-width="' + sw + '" stroke-linecap="square" stroke-linejoin="miter">' + p + "</svg></span>";
+  }
+
+  /* 진행 중 업무 배너 — 위험성평가/안전점검 화면 구성이 비슷해 헷갈리지 않도록
+     초기화면 내비게이션 바로 아래에 항상 크게 표시한다. */
+  var ACTIVE_MODE_BANNER_SCREENS = { "ra-input": 1, "ra-result": 1, "sc-input": 1, "checklist": 1 };
+  function renderActiveModeBanner() {
+    var t = getType(state.typeId);
+    if (!t) return "";
+    var isRa = state.typeId === "RA";
+    return '<div class="active-mode-banner ' + (isRa ? "mode-ra" : "mode-sc") + '">' +
+      '<span class="amb-icon">' + smartSvg(isRa ? "risk" : "clipboard", 20) + '</span>' +
+      '<div class="amb-text"><span class="amb-eyebrow">진행 중인 업무</span>' +
+      '<span class="amb-name">' + esc(t.type_name) + '</span></div></div>';
   }
 
   function raDocNo() {
