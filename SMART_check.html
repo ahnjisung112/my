@@ -347,7 +347,7 @@ window.SMART_TREE = {
         "type_id": "SC",
         "type_name": "안전점검",
         "type_desc": "현장 안전점검(법령 기준)",
-        "status": "hidden",
+        "status": "ready",
         "groups": [
           {
             "group_id": "SC-TEMP",
@@ -12611,8 +12611,8 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
   var mem = {};
   var saveTimer = null;
   var FONT_NAME = "MalgunSubset";
-  /* 현장 안전점검(SC)은 데이터 유지, 메뉴에서만 숨김 (추후 수정 예정) */
-  var HIDE_SC_MENU = true;
+  /* 현장 안전점검(SC): 초기화면에서 위험성평가와 함께 선택 가능하도록 노출 */
+  var HIDE_SC_MENU = false;
 
   var state = {
     screen: "types",
