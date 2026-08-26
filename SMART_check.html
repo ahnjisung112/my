@@ -15877,9 +15877,10 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var bar = document.getElementById("mobile-action-bar");
     if (!bar) return;
     var onRa = state.screen === "ra-input" || state.screen === "ra-result";
-    document.body.classList.toggle("has-mobile-action", !!onRa);
+    var onSc = state.screen === "sc-input";
+    document.body.classList.toggle("has-mobile-action", !!onRa || !!onSc);
     document.body.classList.toggle("ra-mockup", !!onRa);
-    if (!onRa) {
+    if (!onRa && !onSc) {
       bar.classList.add("hidden");
       return;
     }
@@ -15887,6 +15888,27 @@ window.SMART_LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAk4AAADIC
     var sum = document.getElementById("mobile-action-summary");
     var btns = document.getElementById("mobile-action-buttons");
     if (!btns) return;
+    if (onSc) {
+      var scSelected = getSelectedGroupIds();
+      var scItemN = getCurrentItemIds().length;
+      if (sum) sum.innerHTML = "";
+      btns.innerHTML = '<button type="button" class="mobile-btn-success" id="mab-sc-start"' +
+        (scSelected.length ? "" : " disabled") + ">선택한 공종으로 점검 시작" +
+        (scSelected.length ? " (" + scSelected.length + "개 · " + scItemN + "항목)" : "") + "</button>";
+      var scStart = btns.querySelector("#mab-sc-start");
+      if (scStart) scStart.addEventListener("click", function () {
+        var main = document.getElementById("app-main");
+        syncPlanInspectorFromForm(main);
+        if (!getSelectedGroupIds().length) { toast("공종을 1개 이상 선택해주세요."); return; }
+        if (!(state.inspector.inspector_name || "").trim()) { toast("점검자를 입력하세요."); return; }
+        saveAll(true);
+        screenTransition(function () {
+          state.screen = "checklist";
+          state.listSearchQ = "";
+        });
+      });
+      return;
+    }
     var step = ensureRaStep();
     var left = "";
     var right = "";
