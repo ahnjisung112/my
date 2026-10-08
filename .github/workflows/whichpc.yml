@@ -147,6 +147,15 @@ jobs:
               Where-Object { $_.Current.Name -match 'WhichPC|데스크탑' } |
               ForEach-Object { Log "  '$($_.Current.Name -replace "`r?`n", ' / ')' at $($_.Current.BoundingRectangle)" }
           } else { Log "  (no Shell_TrayWnd)" }
+          function TaskbarNames() {
+            if (-not $tray) { return @() }
+            return @($tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
+              Where-Object { $_.Current.Name } | ForEach-Object { $_.Current.Name -replace "`r?`n", ' / ' })
+          }
+          Log "All named taskbar elements: $((TaskbarNames) -join ' | ')"
+          $wpid = [uint32](Get-Process WhichPC).Id
+          Log "Visible WhichPC windows at startup:"
+          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True') { throw "stray taskbar window: $w" } }
 
           Shot 'desktop-with-badge'
           $b = $screen.Bounds
@@ -169,23 +178,22 @@ jobs:
             Shot 'crop-settings' ([int]$r.X) ([int]$r.Y) ([int]$r.Width) ([int]$r.Height)
           } else { Log 'Settings dialog: not found' }
 
-          $wpid = [uint32](Get-Process WhichPC).Id
-          Log "Visible WhichPC windows (taskbar-button mode off):"
-          $stray = $false
-          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True' -and $w -notmatch 'WhichPC 설정') { $stray = $true } }
-          if ($stray) { throw 'WhichPC created a window with a taskbar button while taskbar-button mode is off' }
+          Log "Visible WhichPC windows with the settings dialog open:"
+          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True' -and $w -notmatch 'WhichPC 설정') { throw "stray taskbar window: $w" } }
 
           # Big taskbar button mode: clicking the button must show the card and keep the window minimised.
           try {
+            $before = TaskbarNames
             Set-ItemProperty HKCU:\Software\WhichPC TaskbarButton 1 -Type DWord
             $null = RunWait $exe '--reload'
             Start-Sleep -Seconds 2
-            $tbw = [Win]::FindWindow('WhichPC.TaskbarButton', $null)
+            $tbw = [Win]::FindWindow('WhichPC.TaskbarButton', [NullString]::Value)
             Log "Taskbar-button window: $tbw  iconic=$([Win]::IsIconic($tbw))"
+            $added = @(TaskbarNames | Where-Object { $before -notcontains $_ })
+            Log "  new taskbar elements: $($added -join ' | ')"
             $btn = $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
-              Where-Object { $_.Current.Name -match '데스크탑 · ' } | Select-Object -First 1
+              Where-Object { $added -contains ($_.Current.Name -replace "`r?`n", ' / ') } | Select-Object -First 1
             if ($btn) {
-              Log "  taskbar button: '$($btn.Current.Name)' at $($btn.Current.BoundingRectangle)"
               foreach ($click in 1, 2) {
                 Start-Sleep -Milliseconds 2600  # let a previous card fade out
                 $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
