@@ -59,6 +59,50 @@ jobs:
             $g.Dispose(); $bmp.Dispose()
           }
 
+          Add-Type -TypeDefinition @'
+          using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices;
+          public static class Win {
+            public delegate bool EnumProc(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+            [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+            [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+            [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+            [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
+            // Visible top-level windows of a process; flags the ones the taskbar would show a button for.
+            public static List<string> Visible(uint pid) {
+              var list = new List<string>();
+              EnumWindows((h, l) => {
+                uint p; GetWindowThreadProcessId(h, out p);
+                if (p == pid && IsWindowVisible(h)) {
+                  var c = new StringBuilder(256); GetClassName(h, c, 256);
+                  var t = new StringBuilder(256); GetWindowText(h, t, 256);
+                  long ex = GetWindowLongPtr(h, -20).ToInt64();
+                  bool owned = GetWindow(h, 4) != IntPtr.Zero;
+                  bool button = (ex & 0x40000) != 0 || ((ex & 0x80) == 0 && (ex & 0x08000000) == 0 && !owned);
+                  list.Add(string.Format("{0} '{1}' exstyle=0x{2:X} taskbarButton={3}", c, t, ex, button));
+                }
+                return true;
+              }, IntPtr.Zero);
+              return list;
+            }
+          }
+          '@
+          # Counts "device colour" pixels (orange desktop card) in a screen rectangle.
+          function OrangePixels($x, $y, $w, $h) {
+            $bmp = New-Object System.Drawing.Bitmap $w, $h
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($x, $y, 0, 0, $bmp.Size)
+            $n = 0
+            for ($yy = 0; $yy -lt $h; $yy += 4) { for ($xx = 0; $xx -lt $w; $xx += 4) {
+              $c = $bmp.GetPixel($xx, $yy); if ($c.R -gt 190 -and $c.G -gt 60 -and $c.G -lt 140 -and $c.B -lt 80) { $n++ } } }
+            $g.Dispose(); $bmp.Dispose()
+            return $n
+          }
+
           $report = [System.Collections.Generic.List[string]]::new()
           function Log([string]$line) { Write-Output $line; $report.Add($line) }
 
@@ -125,6 +169,33 @@ jobs:
             Shot 'crop-settings' ([int]$r.X) ([int]$r.Y) ([int]$r.Width) ([int]$r.Height)
           } else { Log 'Settings dialog: not found' }
 
+          $wpid = [uint32](Get-Process WhichPC).Id
+          Log "Visible WhichPC windows (taskbar-button mode off):"
+          $stray = $false
+          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True' -and $w -notmatch 'WhichPC 설정') { $stray = $true } }
+          if ($stray) { throw 'WhichPC created a window with a taskbar button while taskbar-button mode is off' }
+
+          # Big taskbar button mode: clicking the button must show the card and keep the window minimised.
+          try {
+            Set-ItemProperty HKCU:\Software\WhichPC TaskbarButton 1 -Type DWord
+            $null = RunWait $exe '--reload'
+            Start-Sleep -Seconds 2
+            $tbw = [Win]::FindWindow('WhichPC.TaskbarButton', $null)
+            Log "Taskbar-button window: $tbw  iconic=$([Win]::IsIconic($tbw))"
+            $btn = $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
+              Where-Object { $_.Current.Name -match '데스크탑 · ' } | Select-Object -First 1
+            if ($btn) {
+              Log "  taskbar button: '$($btn.Current.Name)' at $($btn.Current.BoundingRectangle)"
+              foreach ($click in 1, 2) {
+                Start-Sleep -Milliseconds 2600  # let a previous card fade out
+                $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                Start-Sleep -Milliseconds 600
+                Log "  click ${click}: card orange pixels=$(OrangePixels ($cx - 330) ($cy - 130) 660 260)  still minimised=$([Win]::IsIconic($tbw))"
+                if ($click -eq 1) { Shot 'tbclick' }
+              }
+            } else { Log '  taskbar button: not found by UI Automation' }
+          } catch { Log "  taskbar-button test error: $_" }
+
           $null = RunWait $exe '--quit'
           Start-Sleep -Seconds 2
           if (Get-Process WhichPC -ErrorAction SilentlyContinue) { throw '--quit did not stop WhichPC' }
@@ -150,10 +221,10 @@ jobs:
           Add-Type -AssemblyName System.Drawing
           $jpeg = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
           $params = New-Object System.Drawing.Imaging.EncoderParameters 1
-          $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 70L
-          Get-ChildItem crop-*.png | ForEach-Object {
+          $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 55L
+          Get-ChildItem crop-settings.png, crop-card.png -ErrorAction SilentlyContinue | ForEach-Object {
             $img = [System.Drawing.Image]::FromFile($_.FullName)
-            $scale = [Math]::Min(1.0, 600.0 / $img.Width)
+            $scale = [Math]::Min(1.0, 560.0 / $img.Width)
             $bmp = New-Object System.Drawing.Bitmap $img, ([int]($img.Width * $scale)), ([int]($img.Height * $scale))
             $ms = New-Object System.IO.MemoryStream
             $bmp.Save($ms, $jpeg, $params)
