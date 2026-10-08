@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain
@@ -29,6 +30,7 @@ jobs:
   windows-smoke-test:
     needs: build
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -38,6 +40,14 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          # Start-Process -Wait would also wait for children (the installer starts WhichPC.exe,
+          # which keeps running), so wait on the process itself only.
+          function RunWait($file, [string[]]$arguments) {
+            $p = Start-Process $file -ArgumentList $arguments -PassThru
+            $null = $p.Handle  # keeps ExitCode readable after exit
+            if (-not $p.WaitForExit(120000)) { throw "$file $arguments did not finish" }
+            return $p
+          }
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           function Shot($name, $x = 0, $y = 0, $w = 0, $h = 0) {
             $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -56,11 +66,11 @@ jobs:
           "Screen: $($screen.Bounds)  work area: $($screen.WorkingArea)"
 
           $setup = (Get-ChildItem setup\*.exe | Select-Object -First 1).FullName
-          Start-Process $setup -ArgumentList '/S', '/TYPE=desktop', '/OVERLAY=1' -Wait
+          $null = RunWait $setup '/S', '/TYPE=desktop', '/OVERLAY=1'
           $exe = "$env:LOCALAPPDATA\Programs\WhichPC\WhichPC.exe"
           if (-not (Test-Path $exe)) { throw 'WhichPC.exe was not installed' }
 
-          $detect = Start-Process $exe -ArgumentList '--detect' -Wait -PassThru
+          $detect = RunWait $exe '--detect'
           "--detect exit code: $($detect.ExitCode)  (1 + device + 10 * reason)"
 
           Start-Sleep -Seconds 8
@@ -96,11 +106,11 @@ jobs:
           Start-Sleep -Seconds 3
           Shot 'settings-dialog'
 
-          Start-Process $exe -ArgumentList '--quit' -Wait
+          $null = RunWait $exe '--quit'
           Start-Sleep -Seconds 2
           if (Get-Process WhichPC -ErrorAction SilentlyContinue) { throw '--quit did not stop WhichPC' }
 
-          Start-Process "$env:LOCALAPPDATA\Programs\WhichPC\Uninstall.exe" -ArgumentList '/S' -Wait
+          $null = RunWait "$env:LOCALAPPDATA\Programs\WhichPC\Uninstall.exe" '/S'
           for ($i = 0; $i -lt 30 -and (Test-Path $exe); $i++) { Start-Sleep -Milliseconds 500 }
           if (Test-Path $exe) { throw 'uninstall left WhichPC.exe behind' }
           if (Test-Path HKCU:\Software\WhichPC) { throw 'uninstall left settings behind' }
