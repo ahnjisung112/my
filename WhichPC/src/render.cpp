@@ -195,8 +195,13 @@ HICON CreateDeviceIcon(int device, COLORREF color, int size, bool remote) {
     HBITMAP colorBmp = CreateDib32(size, size, &bits);
     if (!colorBmp) return nullptr;
     memcpy(bits, px.data(), px.size() * 4);
-    std::vector<BYTE> zeros(((size + 15) / 16) * 2 * size, 0);
-    HBITMAP maskBmp = CreateBitmap(size, size, 1, 1, zeros.data());
+    // AND mask (rows WORD aligned): 1 = transparent, for code paths that ignore alpha
+    const int stride = ((size + 15) / 16) * 2;
+    std::vector<BYTE> mask(stride * size, 0);
+    for (int y = 0; y < size; ++y)
+        for (int x = 0; x < size; ++x)
+            if ((px[y * size + x] >> 24) == 0) mask[y * stride + x / 8] |= (BYTE)(0x80 >> (x % 8));
+    HBITMAP maskBmp = CreateBitmap(size, size, 1, 1, mask.data());
     ICONINFO ii = {};
     ii.fIcon = TRUE;
     ii.hbmMask = maskBmp;

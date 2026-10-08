@@ -153,7 +153,7 @@ void ShowBalloon(const std::wstring& title, const std::wstring& text) {
     if (!g.trayAdded) return;
     HICON big = CreateDeviceIcon(g.s.device, Color(), LargeIconSize(), g.session.remote);
     NOTIFYICONDATAW nid = BaseNid();
-    nid.uFlags = NIF_INFO;
+    nid.uFlags = NIF_INFO | NIF_SHOWTIP;  // without NIF_SHOWTIP v4 icons lose their hover tooltip
     nid.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
     nid.hBalloonIcon = big;
     CopyTrunc(nid.szInfoTitle, ARRAYSIZE(nid.szInfoTitle), title);
@@ -473,7 +473,10 @@ LRESULT CALLBACK MainProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                     ShowSettingsDialog(h);
                     break;
                 case WM_CONTEXTMENU:
-                    ShowTrayMenu(POINT{GET_X_LPARAM(wp), GET_Y_LPARAM(wp)});
+                    if (SettingsDialogOpen())  // a menu change would be overwritten by the dialog's OK
+                        ShowSettingsDialog(h);
+                    else
+                        ShowTrayMenu(POINT{GET_X_LPARAM(wp), GET_Y_LPARAM(wp)});
                     break;
             }
             return 0;
@@ -727,6 +730,7 @@ int WINAPI wWinMain(HINSTANCE hinst, HINSTANCE, PWSTR, int) {
     HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, kMainClass, L"WhichPC", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, hinst,
                                 nullptr);
     if (!hwnd) return 1;
+    OverlaySetNotifyWindow(hwnd);
     // Let the TaskbarCreated broadcast through UIPI if explorer runs elevated.
     ChangeWindowMessageFilterEx(hwnd, g.msgTaskbarCreated, MSGFLT_ALLOW, nullptr);
     ChangeWindowMessageFilterEx(hwnd, WM_APP_COMMAND, MSGFLT_ALLOW, nullptr);

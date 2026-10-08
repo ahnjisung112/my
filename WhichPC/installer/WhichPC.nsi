@@ -70,6 +70,7 @@ Var IconLaptop
 Var IconDesktop
 Var hIconLaptop
 Var hIconDesktop
+Var WasRunning      ; 1 if an older WhichPC was running when setup started
 
 ; ---------------------------------------------------------------------------
 ; pages
@@ -97,21 +98,32 @@ SetFont /LANG=${LANG_KOREAN} "Malgun Gothic" 9
 ; helpers
 ; ---------------------------------------------------------------------------
 !macro CLOSE_RUNNING UN
+; Asks a running WhichPC to quit and waits until the process has really exited
+; (so its exe is no longer locked). Sets $WasRunning to 1 when one was found.
 Function ${UN}CloseRunning
+  StrCpy $WasRunning 0
   FindWindow $0 "${MAINCLASS}"
   ${If} $0 <> 0
+    StrCpy $WasRunning 1
     DetailPrint "실행 중인 WhichPC 종료..."
+    System::Call 'user32::GetWindowThreadProcessId(p r0, *i .r2) i .r4'
+    System::Call 'kernel32::OpenProcess(i 0x00100000, i 0, i r2) p .r3'  ; SYNCHRONIZE
     SendMessage $0 ${WM_CLOSE} 0 0 /TIMEOUT=3000
-    StrCpy $1 0
-    ${DoWhile} $1 < 30
-      Sleep 150
-      FindWindow $0 "${MAINCLASS}"
-      ${If} $0 = 0
-        ${Break}
-      ${EndIf}
-      IntOp $1 $1 + 1
-    ${Loop}
-    Sleep 300
+    ${If} $3 P<> 0
+      System::Call 'kernel32::WaitForSingleObject(p r3, i 8000) i .r4'
+      System::Call 'kernel32::CloseHandle(p r3)'
+    ${Else}
+      StrCpy $1 0
+      ${DoWhile} $1 < 30
+        Sleep 150
+        FindWindow $0 "${MAINCLASS}"
+        ${If} $0 = 0
+          ${Break}
+        ${EndIf}
+        IntOp $1 $1 + 1
+      ${Loop}
+      Sleep 500
+    ${EndIf}
   ${EndIf}
 FunctionEnd
 !macroend
@@ -338,8 +350,10 @@ Section "WhichPC" SecMain
   WriteRegDWORD HKCU "${UNINSTKEY}" "EstimatedSize" "$0"
 
   ${If} ${Silent}
-  ${AndIf} $Autostart = 1
-    Exec '"$INSTDIR\${APPEXE}" --autostart'
+    ${If} $Autostart = 1
+    ${OrIf} $WasRunning = 1
+      Exec '"$INSTDIR\${APPEXE}" --autostart'
+    ${EndIf}
   ${EndIf}
 SectionEnd
 

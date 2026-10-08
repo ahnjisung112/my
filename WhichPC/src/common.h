@@ -100,6 +100,7 @@ std::vector<std::wstring> ParseAppList(const std::wstring& list);
 
 // Opens the (modal) settings dialog. Applies changes through App_ApplySettings.
 void ShowSettingsDialog(HWND owner);
+bool SettingsDialogOpen();
 
 // --------------------------------------------------------------------------
 // system.cpp
@@ -178,7 +179,8 @@ void OverlayDestroyAll();
 bool OverlayTick(const Settings& s);  // returns true while an animation is running
 bool OverlayAnimate();                // returns true while still animating
 void OverlayReassertTopmost();
-void OverlaySetSuppressed(bool suppressed);  // hide every badge while a menu is open
+void OverlaySetSuppressed(bool suppressed);
+void OverlaySetNotifyWindow(HWND hwnd);  // hide every badge while a menu is open
 bool OverlayIsOwnWindow(HWND hwnd);
 
 void FlashShow(const CardContent& c);

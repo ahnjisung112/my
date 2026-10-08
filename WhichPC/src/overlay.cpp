@@ -82,7 +82,8 @@ struct Badge {
 
 std::vector<Badge> g_badges;
 HWND g_lastForeground = nullptr;
-bool g_suppressed = false;
+int g_suppressed = 0;     // > 0 while a menu is open
+HWND g_notify = nullptr;  // main window, told about DPI changes on other monitors
 
 Layered g_flash;
 ULONGLONG g_flashStart = 0;
@@ -91,6 +92,10 @@ float g_flashScale = 1.f;
 
 LRESULT CALLBACK OverlayProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_NCHITTEST) return HTTRANSPARENT;
+    if (m == WM_DPICHANGED) {  // the main window only hears about its own (primary) monitor
+        if (g_notify) PostMessageW(g_notify, WM_DPICHANGED, w, 0);
+        return 0;
+    }
     if (m == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
     return DefWindowProcW(h, m, w, l);
 }
@@ -158,7 +163,7 @@ bool IsFullscreen(HWND fg, HMONITOR* monOut) {
     if (!wcscmp(cls, L"Progman") || !wcscmp(cls, L"WorkerW") || !wcscmp(cls, L"Shell_TrayWnd") ||
         !wcscmp(cls, L"Shell_SecondaryTrayWnd"))
         return false;
-    if (GetWindowLongW(fg, GWL_STYLE) & WS_CAPTION) return false;  // ordinary maximised window
+    if ((GetWindowLongW(fg, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) return false;  // ordinary maximised window
     RECT r;
     if (!GetWindowRect(fg, &r)) return false;
     HMONITOR mon = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
@@ -213,15 +218,17 @@ void OverlayRebuild(const Settings& s, const BadgeContent& content) {
         b.win.pos =
             CornerPosition(mi.rcWork, s.overlayCorner, b.win.img.w, b.win.img.h, (int)std::lround(4 * dpiScale));
         b.win.alpha = 0;
-        b.win.target = targetAlpha;
+        b.win.target = g_suppressed ? 0 : targetAlpha;
         g_badges.push_back(b);
     }
     g_lastForeground = nullptr;
 }
 
+void OverlaySetNotifyWindow(HWND hwnd) { g_notify = hwnd; }
+
 void OverlaySetSuppressed(bool suppressed) {
-    g_suppressed = suppressed;
-    if (!suppressed) return;
+    g_suppressed = std::max(0, g_suppressed + (suppressed ? 1 : -1));
+    if (!g_suppressed) return;
     for (auto& b : g_badges) {  // hide at once, no fade
         b.win.alpha = b.win.target = 0;
         b.win.Push();
@@ -268,6 +275,7 @@ bool OverlayTick(const Settings& s) {
 }
 
 bool OverlayAnimate() {
+    if (g_suppressed) return false;
     bool any = false;
     for (auto& b : g_badges) any |= b.win.Step(34);
     return any;

@@ -554,6 +554,8 @@ INT_PTR CALLBACK SettingsProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 
 }  // namespace
 
+bool SettingsDialogOpen() { return g_dlg != nullptr; }
+
 void ShowSettingsDialog(HWND owner) {
     if (g_dlg) {  // already open: bring it to the front
         if (g_dlg->hwnd) {
