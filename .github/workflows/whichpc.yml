@@ -187,7 +187,10 @@ jobs:
           foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True' -and $w -notmatch 'WhichPC 설정') { DumpAppLog; throw "stray taskbar window: $w" } }
 
           # Big taskbar button mode: clicking the button must show the card and keep the window minimised.
+          # Close the settings dialog first, or the taskbar groups both windows into one button.
           try {
+            $dlg.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
+            Start-Sleep -Seconds 1
             $before = TaskbarNames
             Set-ItemProperty HKCU:\Software\WhichPC TaskbarButton 1 -Type DWord
             $null = RunWait $exe '--reload'
@@ -199,6 +202,8 @@ jobs:
             $btn = $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
               Where-Object { $added -contains ($_.Current.Name -replace "`r?`n", ' / ') } | Select-Object -First 1
             if ($btn) {
+              Start-Sleep -Milliseconds 2600
+              Log "  baseline: card orange pixels=$(OrangePixels ($cx - 330) ($cy - 130) 660 260)"
               foreach ($click in 1, 2) {
                 Start-Sleep -Milliseconds 2600  # let a previous card fade out
                 $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()

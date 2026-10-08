@@ -168,6 +168,7 @@ void ShowBalloon(const std::wstring& title, const std::wstring& text) {
 // big identify card
 // --------------------------------------------------------------------------
 void Flash() {
+    DebugLog(L"flash");
     g.lastFlash = GetTickCount64();
     FlashShow(MakeCard());
     SetTimer(g.hwnd, TIMER_FLASH, 15, nullptr);
@@ -238,12 +239,14 @@ void UpdateTaskbarButton() {
 LRESULT CALLBACK TaskbarBtnProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_QUERYOPEN:  // taskbar click / Alt+Tab on the minimised window
+            DebugLog(L"taskbar button: restore refused");
             Flash();
             return FALSE;
         case WM_SYSCOMMAND:
             switch (wp & 0xFFF0) {
                 case SC_MINIMIZE:  // the taskbar minimises an "active" button on the next click
                     if (IsIconic(h)) {
+                        DebugLog(L"taskbar button: minimise while minimised");
                         Flash();
                         return 0;
                     }
