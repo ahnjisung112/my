@@ -8,6 +8,8 @@
 #include <wtsapi32.h>
 
 #include <algorithm>
+#include <cstdarg>
+#include <cwchar>
 #include <cwctype>
 
 // --------------------------------------------------------------------------
@@ -120,6 +122,31 @@ SessionInfo QuerySessionInfo() {
 // --------------------------------------------------------------------------
 // misc
 // --------------------------------------------------------------------------
+void DebugLog(const wchar_t* fmt, ...) {
+    static int enabled = -1;
+    static wchar_t path[MAX_PATH];
+    if (enabled < 0) {
+        DWORD n = GetEnvironmentVariableW(L"WHICHPC_LOG", path, MAX_PATH);
+        enabled = n > 0 && n < MAX_PATH;
+    }
+    if (!enabled) return;
+    wchar_t line[1024];
+    int n = swprintf(line, ARRAYSIZE(line), L"%10llu [%lu] ", GetTickCount64(), GetCurrentProcessId());
+    va_list args;
+    va_start(args, fmt);
+    vswprintf(line + n, ARRAYSIZE(line) - n - 2, fmt, args);
+    va_end(args);
+    wcscat(line, L"\r\n");
+    char utf8[4096];
+    int len = WideCharToMultiByte(CP_UTF8, 0, line, -1, utf8, sizeof(utf8), nullptr, nullptr);
+    HANDLE f = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return;
+    DWORD written;
+    if (len > 1) WriteFile(f, utf8, len - 1, &written, nullptr);
+    CloseHandle(f);
+}
+
 std::wstring ComputerName() {
     wchar_t name[MAX_COMPUTERNAME_LENGTH + 64] = {};
     DWORD n = ARRAYSIZE(name);

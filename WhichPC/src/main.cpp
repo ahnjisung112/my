@@ -40,6 +40,7 @@ struct App {
     SessionInfo session;
     std::wstring computer;
     UINT msgTaskbarCreated = 0;
+    UINT msgCommand = 0;
     bool trayAdded = false;
     int trayRetries = 0;
     int promoteAttempts = 0;
@@ -451,7 +452,33 @@ void OnStartup() {
     }
 }
 
+void HandleCommand(HWND h, WPARAM cmd) {
+    DebugLog(L"command %u", (unsigned)cmd);
+    switch (cmd) {
+        case CMD_SHOW_SETTINGS:
+            ShowSettingsDialog(h);
+            break;
+        case CMD_FLASH:
+            Flash();
+            break;
+        case CMD_QUIT:
+            DestroyWindow(h);
+            break;
+        case CMD_RELOAD: {
+            Settings s;
+            LoadSettings(s);
+            if (s.device < 0) s.device = g.s.device;
+            App_ApplySettings(s, GetAutostart());
+            break;
+        }
+    }
+}
+
 LRESULT CALLBACK MainProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (g.msgCommand && msg == g.msgCommand) {  // from a second instance
+        HandleCommand(h, wp);
+        return 0;
+    }
     if (g.msgTaskbarCreated && msg == g.msgTaskbarCreated) {  // explorer (re)started
         g.trayAdded = false;
         UpdateTrayIcon();
@@ -463,6 +490,8 @@ LRESULT CALLBACK MainProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             g.sessionNotify = WTSRegisterSessionNotification(h, NOTIFY_FOR_THIS_SESSION) != FALSE;
             return 0;
         case WM_TRAYICON:
+            if (HIWORD(lp) != kTrayUid) return 0;  // not from our icon
+            if (LOWORD(lp) != WM_MOUSEMOVE) DebugLog(L"tray event 0x%04x", LOWORD(lp));
             switch (LOWORD(lp)) {
                 case NIN_SELECT:
                 case NIN_KEYSELECT:
@@ -470,6 +499,7 @@ LRESULT CALLBACK MainProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                     Flash();
                     break;
                 case WM_LBUTTONDBLCLK:
+                    DebugLog(L"settings: tray double-click");
                     ShowSettingsDialog(h);
                     break;
                 case WM_CONTEXTMENU:
@@ -482,26 +512,6 @@ LRESULT CALLBACK MainProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_HOTKEY:
             if (wp == kHotkeyId) Flash();
-            return 0;
-        case WM_APP_COMMAND:
-            switch (wp) {
-                case CMD_SHOW_SETTINGS:
-                    ShowSettingsDialog(h);
-                    break;
-                case CMD_FLASH:
-                    Flash();
-                    break;
-                case CMD_QUIT:
-                    DestroyWindow(h);
-                    break;
-                case CMD_RELOAD: {
-                    Settings s;
-                    LoadSettings(s);
-                    if (s.device < 0) s.device = g.s.device;
-                    App_ApplySettings(s, GetAutostart());
-                    break;
-                }
-            }
             return 0;
         case WM_WTSSESSION_CHANGE:
             if (wp == WTS_REMOTE_CONNECT) g.pendingRemoteNotice = true;
@@ -627,7 +637,7 @@ bool ForwardToRunning(AppCommand cmd, bool waitForExit) {
     DWORD pid = 0;
     GetWindowThreadProcessId(other, &pid);
     AllowSetForegroundWindow(pid);
-    PostMessageW(other, WM_APP_COMMAND, cmd, 0);
+    PostMessageW(other, g.msgCommand, cmd, 0);
     if (waitForExit) {
         HANDLE proc = OpenProcess(SYNCHRONIZE, FALSE, pid);
         if (proc) {
@@ -665,6 +675,9 @@ int WINAPI wWinMain(HINSTANCE hinst, HINSTANCE, PWSTR, int) {
         DetectResult r = DetectDeviceType();
         return 1 + r.device + 10 * r.reason;
     }
+
+    g.msgCommand = RegisterWindowMessageW(kCommandMessage);
+    DebugLog(L"start: %ls", GetCommandLineW());
 
     const int forcedType = ArgDeviceType();
     if (forcedType >= 0) {
@@ -733,7 +746,7 @@ int WINAPI wWinMain(HINSTANCE hinst, HINSTANCE, PWSTR, int) {
     OverlaySetNotifyWindow(hwnd);
     // Let the TaskbarCreated broadcast through UIPI if explorer runs elevated.
     ChangeWindowMessageFilterEx(hwnd, g.msgTaskbarCreated, MSGFLT_ALLOW, nullptr);
-    ChangeWindowMessageFilterEx(hwnd, WM_APP_COMMAND, MSGFLT_ALLOW, nullptr);
+    ChangeWindowMessageFilterEx(hwnd, g.msgCommand, MSGFLT_ALLOW, nullptr);
 
     UpdateHotkey();
     RefreshVisuals();

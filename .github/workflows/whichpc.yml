@@ -38,6 +38,8 @@ jobs:
           path: setup
       - name: Install, run, inspect, uninstall
         shell: pwsh
+        env:
+          WHICHPC_LOG: ${{ runner.temp }}\whichpc.log  # inherited by WhichPC through the installer
         run: |
           $ErrorActionPreference = 'Stop'
           # Start-Process -Wait would also wait for children (the installer starts WhichPC.exe,
@@ -104,7 +106,10 @@ jobs:
           }
 
           $report = [System.Collections.Generic.List[string]]::new()
-          function Log([string]$line) { Write-Output $line; $report.Add($line) }
+          function Log([string]$line) { Write-Output $line; $report.Add($line); Add-Content report.txt $line -Encoding utf8 }
+          function DumpAppLog() {
+            if (Test-Path $env:WHICHPC_LOG) { Log 'WhichPC debug log:'; Get-Content $env:WHICHPC_LOG | ForEach-Object { Log "  $_" } }
+          }
 
           $os = Get-CimInstance Win32_OperatingSystem
           Log "OS: $($os.Caption) build $($os.BuildNumber)"
@@ -155,7 +160,7 @@ jobs:
           Log "All named taskbar elements: $((TaskbarNames) -join ' | ')"
           $wpid = [uint32](Get-Process WhichPC).Id
           Log "Visible WhichPC windows at startup:"
-          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True') { throw "stray taskbar window: $w" } }
+          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True') { DumpAppLog; throw "stray taskbar window: $w" } }
 
           Shot 'desktop-with-badge'
           $b = $screen.Bounds
@@ -179,7 +184,7 @@ jobs:
           } else { Log 'Settings dialog: not found' }
 
           Log "Visible WhichPC windows with the settings dialog open:"
-          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True' -and $w -notmatch 'WhichPC 설정') { throw "stray taskbar window: $w" } }
+          foreach ($w in [Win]::Visible($wpid)) { Log "  $w"; if ($w -match 'taskbarButton=True' -and $w -notmatch 'WhichPC 설정') { DumpAppLog; throw "stray taskbar window: $w" } }
 
           # Big taskbar button mode: clicking the button must show the card and keep the window minimised.
           try {
@@ -214,8 +219,8 @@ jobs:
           if (Test-Path $exe) { throw 'uninstall left WhichPC.exe behind' }
           if (Test-Path HKCU:\Software\WhichPC) { throw 'uninstall left settings behind' }
           Log 'Uninstall: files and settings removed'
+          DumpAppLog
           Log 'Smoke test passed.'
-          $report | Set-Content report.txt -Encoding utf8
           "## WhichPC Windows smoke test`n" + (($report | ForEach-Object { "    $_" }) -join "`n") | Add-Content $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         if: always()
