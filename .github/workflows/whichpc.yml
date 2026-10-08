@@ -1,0 +1,131 @@
+name: WhichPC
+
+on:
+  push:
+    paths:
+      - "WhichPC/**"
+      - ".github/workflows/whichpc.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mingw-w64 nsis python3-pil
+      - name: Build exe + installer
+        run: WhichPC/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WhichPC-Setup
+          path: WhichPC/dist/*.exe
+
+  windows-smoke-test:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: WhichPC-Setup
+          path: setup
+      - name: Install, run, inspect, uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name, $x = 0, $y = 0, $w = 0, $h = 0) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            if ($w -eq 0) { $x = $b.X; $y = $b.Y; $w = $b.Width; $h = $b.Height }
+            $bmp = New-Object System.Drawing.Bitmap $w, $h
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($x, $y, 0, 0, $bmp.Size)
+            $bmp.Save("$PWD\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+
+          $os = Get-CimInstance Win32_OperatingSystem
+          "OS: $($os.Caption) build $($os.BuildNumber)"
+          "Explorer running: $([bool](Get-Process explorer -ErrorAction SilentlyContinue))"
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+          "Screen: $($screen.Bounds)  work area: $($screen.WorkingArea)"
+
+          $setup = (Get-ChildItem setup\*.exe | Select-Object -First 1).FullName
+          Start-Process $setup -ArgumentList '/S', '/TYPE=desktop', '/OVERLAY=1' -Wait
+          $exe = "$env:LOCALAPPDATA\Programs\WhichPC\WhichPC.exe"
+          if (-not (Test-Path $exe)) { throw 'WhichPC.exe was not installed' }
+
+          $detect = Start-Process $exe -ArgumentList '--detect' -Wait -PassThru
+          "--detect exit code: $($detect.ExitCode)  (1 + device + 10 * reason)"
+
+          Start-Sleep -Seconds 8
+          if (-not (Get-Process WhichPC -ErrorAction SilentlyContinue)) { throw 'WhichPC is not running after install' }
+          "Settings:"; Get-ItemProperty HKCU:\Software\WhichPC | Format-List DeviceType, Overlay, TrayAlwaysShow | Out-String
+          "Autostart: $((Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run).WhichPC)"
+
+          "NotifyIconSettings entries for WhichPC (Windows 11 tray promotion):"
+          Get-ChildItem 'HKCU:\Control Panel\NotifyIconSettings' -ErrorAction SilentlyContinue | ForEach-Object {
+            $v = Get-ItemProperty $_.PSPath
+            if ($v.ExecutablePath -like '*WhichPC*') { "  $($v.ExecutablePath)  IsPromoted=$($v.IsPromoted)" }
+          }
+
+          "Taskbar UI Automation names containing the label:"
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $root = [System.Windows.Automation.AutomationElement]::RootElement
+          $cond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
+          $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
+          if ($tray) {
+            $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
+              ForEach-Object { $_.Current.Name } | Where-Object { $_ -match 'WhichPC|데스크탑' } | ForEach-Object { "  $_" }
+          } else { "  (no Shell_TrayWnd)" }
+
+          Shot 'desktop-with-badge'
+          $b = $screen.Bounds
+          Shot 'taskbar-right' ($b.Right - 520) ($b.Bottom - 90) 520 90
+
+          Start-Process $exe -ArgumentList '--flash'
+          Start-Sleep -Milliseconds 700
+          Shot 'identify-card'
+
+          Start-Process $exe -ArgumentList '--settings'
+          Start-Sleep -Seconds 3
+          Shot 'settings-dialog'
+
+          Start-Process $exe -ArgumentList '--quit' -Wait
+          Start-Sleep -Seconds 2
+          if (Get-Process WhichPC -ErrorAction SilentlyContinue) { throw '--quit did not stop WhichPC' }
+
+          Start-Process "$env:LOCALAPPDATA\Programs\WhichPC\Uninstall.exe" -ArgumentList '/S' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path $exe); $i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path $exe) { throw 'uninstall left WhichPC.exe behind' }
+          if (Test-Path HKCU:\Software\WhichPC) { throw 'uninstall left settings behind' }
+          'Smoke test passed.'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshots
+          path: "*.png"
+      - name: Screenshot previews (base64 JPEG, for reading without downloading artifacts)
+        if: always()
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $jpeg = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+          $params = New-Object System.Drawing.Imaging.EncoderParameters 1
+          $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 80L
+          Get-ChildItem *.png | ForEach-Object {
+            $img = [System.Drawing.Image]::FromFile($_.FullName)
+            $scale = [Math]::Min(1.0, 960.0 / $img.Width)
+            $bmp = New-Object System.Drawing.Bitmap $img, ([int]($img.Width * $scale)), ([int]($img.Height * $scale))
+            $ms = New-Object System.IO.MemoryStream
+            $bmp.Save($ms, $jpeg, $params)
+            "=== BEGIN $($_.BaseName) ==="
+            [Convert]::ToBase64String($ms.ToArray(), 'InsertLineBreaks')
+            "=== END $($_.BaseName) ==="
+            $img.Dispose(); $bmp.Dispose()
+          }

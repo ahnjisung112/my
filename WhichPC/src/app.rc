@@ -1,0 +1,97 @@
+#pragma code_page(65001)
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+LANGUAGE LANG_KOREAN, SUBLANG_DEFAULT
+
+IDI_APP     ICON "../assets/app.ico"
+IDI_LAPTOP  ICON "../assets/laptop.ico"
+IDI_DESKTOP ICON "../assets/desktop.ico"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+#include "../assets/masks.rc"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041204B0"
+        BEGIN
+            VALUE "CompanyName", "WhichPC"
+            VALUE "FileDescription", "WhichPC - 노트북/데스크탑 표시기"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "WhichPC"
+            VALUE "LegalCopyright", "(c) 2026 WhichPC"
+            VALUE "OriginalFilename", "WhichPC.exe"
+            VALUE "ProductName", "WhichPC"
+            VALUE "ProductVersion", "1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x412, 1200
+    END
+END
+
+IDD_SETTINGS DIALOGEX 0, 0, 440, 298
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "WhichPC 설정"
+FONT 9, "Malgun Gothic", 400, 0, 0x81
+BEGIN
+    CONTROL         "", IDC_PREVIEW, "Static", SS_OWNERDRAW, 7, 7, 426, 44
+
+    GROUPBOX        "이 PC", -1, 7, 57, 210, 84
+    LTEXT           "기기 종류", -1, 15, 72, 44, 9
+    AUTORADIOBUTTON "노트북", IDC_TYPE_LAPTOP, 62, 71, 46, 10, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "데스크탑", IDC_TYPE_DESKTOP, 110, 71, 52, 10
+    PUSHBUTTON      "자동 감지", IDC_DETECT, 166, 68, 44, 14, WS_GROUP
+    LTEXT           "", IDC_DETECT_INFO, 62, 84, 150, 9
+    LTEXT           "표시 이름", -1, 15, 101, 44, 9
+    EDITTEXT        IDC_LABEL, 62, 99, 148, 13, ES_AUTOHSCROLL
+    LTEXT           "아이콘 색", -1, 15, 121, 44, 9
+    COMBOBOX        IDC_COLOR, 62, 119, 148, 200, CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
+
+    GROUPBOX        "작업 표시줄", -1, 7, 146, 210, 56
+    AUTOCHECKBOX    "알림 영역에 아이콘 항상 표시 (숨김 방지)", IDC_TRAY_ALWAYS, 15, 158, 198, 10
+    AUTOCHECKBOX    "작업 표시줄에 큰 버튼으로도 표시", IDC_TASKBAR_BTN, 15, 171, 198, 10
+    CONTROL         "<a>Windows 작업 표시줄 설정 열기</a>", IDC_TRAY_SETTINGS, "SysLink", WS_TABSTOP, 15, 186, 198, 10
+
+    GROUPBOX        "알림 및 시작", -1, 7, 207, 210, 63
+    AUTOCHECKBOX    "원격 접속되면 알림 표시", IDC_NOTIFY_REMOTE, 15, 219, 198, 10
+    AUTOCHECKBOX    "잠금 해제·원격 접속 시 화면에 크게 표시", IDC_FLASH_UNLOCK, 15, 232, 198, 10
+    AUTOCHECKBOX    "Ctrl+Alt+Shift+W 로 크게 표시", IDC_HOTKEY, 15, 245, 198, 10
+    AUTOCHECKBOX    "Windows 시작 시 자동 실행", IDC_AUTOSTART, 15, 258, 198, 10
+
+    GROUPBOX        "화면 배지", -1, 223, 57, 210, 213
+    AUTOCHECKBOX    "화면 모서리에 배지 표시 (전체 화면에서도 구분)", IDC_OVERLAY, 231, 70, 198, 10
+    LTEXT           "위치", IDC_STATIC_CORNER, 231, 89, 32, 9
+    COMBOBOX        IDC_CORNER, 266, 87, 76, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_MONITORS, 346, 87, 79, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "크기", IDC_STATIC_SIZE, 231, 107, 32, 9
+    COMBOBOX        IDC_BADGE_SIZE, 266, 105, 76, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "불투명도", IDC_STATIC_OPACITY, 231, 125, 34, 9
+    CONTROL         "", IDC_OPACITY, "msctls_trackbar32", TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 264, 122, 134, 15
+    LTEXT           "90%", IDC_OPACITY_LABEL, 400, 125, 26, 9
+    AUTOCHECKBOX    "마우스를 올리면 잠시 숨기기", IDC_HIDE_HOVER, 231, 143, 198, 10
+    AUTOCHECKBOX    "원격 접속 창이 앞에 있으면 숨기기", IDC_HIDE_REMOTE, 231, 156, 198, 10
+    LTEXT           "원격 화면 위에 이 PC의 배지가 겹쳐 보이는 혼동을 막습니다.", -1, 242, 167, 186, 18
+    AUTOCHECKBOX    "전체 화면 프로그램 위에서는 숨기기", IDC_HIDE_FULLSCREEN, 231, 187, 198, 10
+    LTEXT           "원격 접속 프로그램 ( ; 로 구분)", IDC_STATIC_REMOTE, 231, 205, 150, 9
+    PUSHBUTTON      "기본값", IDC_REMOTE_DEFAULT, 385, 202, 40, 13
+    EDITTEXT        IDC_REMOTE_APPS, 231, 218, 194, 44, ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL
+
+    LTEXT           "WhichPC 1.0.0", -1, 9, 281, 100, 9, WS_DISABLED
+    DEFPUSHBUTTON   "확인", IDOK, 273, 277, 50, 14
+    PUSHBUTTON      "취소", IDCANCEL, 328, 277, 50, 14
+    PUSHBUTTON      "적용", IDC_APPLY, 383, 277, 50, 14
+END
