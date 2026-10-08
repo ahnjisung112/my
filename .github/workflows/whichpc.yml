@@ -59,83 +59,107 @@ jobs:
             $g.Dispose(); $bmp.Dispose()
           }
 
+          $report = [System.Collections.Generic.List[string]]::new()
+          function Log([string]$line) { Write-Output $line; $report.Add($line) }
+
           $os = Get-CimInstance Win32_OperatingSystem
-          "OS: $($os.Caption) build $($os.BuildNumber)"
-          "Explorer running: $([bool](Get-Process explorer -ErrorAction SilentlyContinue))"
+          Log "OS: $($os.Caption) build $($os.BuildNumber)"
+          Log "Explorer running: $([bool](Get-Process explorer -ErrorAction SilentlyContinue))"
           $screen = [System.Windows.Forms.Screen]::PrimaryScreen
-          "Screen: $($screen.Bounds)  work area: $($screen.WorkingArea)"
+          Log "Screen: $($screen.Bounds)  work area: $($screen.WorkingArea)"
 
           $setup = (Get-ChildItem setup\*.exe | Select-Object -First 1).FullName
           $null = RunWait $setup '/S', '/TYPE=desktop', '/OVERLAY=1'
           $exe = "$env:LOCALAPPDATA\Programs\WhichPC\WhichPC.exe"
           if (-not (Test-Path $exe)) { throw 'WhichPC.exe was not installed' }
+          Log "Installed: $exe"
 
           $detect = RunWait $exe '--detect'
-          "--detect exit code: $($detect.ExitCode)  (1 + device + 10 * reason)"
+          Log "--detect exit code: $($detect.ExitCode)  (1 + device + 10 * reason)"
 
           Start-Sleep -Seconds 8
           if (-not (Get-Process WhichPC -ErrorAction SilentlyContinue)) { throw 'WhichPC is not running after install' }
-          "Settings:"; Get-ItemProperty HKCU:\Software\WhichPC | Format-List DeviceType, Overlay, TrayAlwaysShow | Out-String
-          "Autostart: $((Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run).WhichPC)"
+          $cfg = Get-ItemProperty HKCU:\Software\WhichPC
+          Log "Settings: DeviceType=$($cfg.DeviceType) Overlay=$($cfg.Overlay) TrayAlwaysShow=$($cfg.TrayAlwaysShow)"
+          Log "Autostart: $((Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run).WhichPC)"
 
-          "NotifyIconSettings entries for WhichPC (Windows 11 tray promotion):"
+          Log "NotifyIconSettings entries for WhichPC (Windows 11 tray promotion):"
           Get-ChildItem 'HKCU:\Control Panel\NotifyIconSettings' -ErrorAction SilentlyContinue | ForEach-Object {
             $v = Get-ItemProperty $_.PSPath
-            if ($v.ExecutablePath -like '*WhichPC*') { "  $($v.ExecutablePath)  IsPromoted=$($v.IsPromoted)" }
+            if ($v.ExecutablePath -like '*WhichPC*') { Log "  $($v.ExecutablePath)  IsPromoted=$($v.IsPromoted)" }
           }
 
-          "Taskbar UI Automation names containing the label:"
           Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-          $root = [System.Windows.Automation.AutomationElement]::RootElement
-          $cond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
-          $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
+          $UIA = [System.Windows.Automation.AutomationElement]
+          $root = $UIA::RootElement
+          function FindTop($property, $value) {
+            $c = New-Object System.Windows.Automation.PropertyCondition $property, $value
+            return $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $c)
+          }
+          Log "Taskbar elements naming the device (visible = promoted out of the overflow):"
+          $tray = FindTop $UIA::ClassNameProperty 'Shell_TrayWnd'
           if ($tray) {
             $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
-              ForEach-Object { $_.Current.Name } | Where-Object { $_ -match 'WhichPC|데스크탑' } | ForEach-Object { "  $_" }
-          } else { "  (no Shell_TrayWnd)" }
+              Where-Object { $_.Current.Name -match 'WhichPC|데스크탑' } |
+              ForEach-Object { Log "  '$($_.Current.Name -replace "`r?`n", ' / ')' at $($_.Current.BoundingRectangle)" }
+          } else { Log "  (no Shell_TrayWnd)" }
 
           Shot 'desktop-with-badge'
           $b = $screen.Bounds
-          Shot 'taskbar-right' ($b.Right - 520) ($b.Bottom - 90) 520 90
+          Shot 'crop-taskbar' ($b.Right - 520) ($b.Bottom - 90) 520 90
 
           Start-Process $exe -ArgumentList '--flash'
           Start-Sleep -Milliseconds 700
           Shot 'identify-card'
+          $wa = $screen.WorkingArea
+          $cx = $wa.X + [int]($wa.Width / 2); $cy = $wa.Y + [int]($wa.Height / 2) - [int]($wa.Height / 12)
+          Shot 'crop-card' ($cx - 330) ($cy - 130) 660 260
 
           Start-Process $exe -ArgumentList '--settings'
           Start-Sleep -Seconds 3
           Shot 'settings-dialog'
+          $dlg = FindTop $UIA::NameProperty 'WhichPC 설정'
+          if ($dlg) {
+            $r = $dlg.Current.BoundingRectangle
+            Log "Settings dialog: $r"
+            Shot 'crop-settings' ([int]$r.X) ([int]$r.Y) ([int]$r.Width) ([int]$r.Height)
+          } else { Log 'Settings dialog: not found' }
 
           $null = RunWait $exe '--quit'
           Start-Sleep -Seconds 2
           if (Get-Process WhichPC -ErrorAction SilentlyContinue) { throw '--quit did not stop WhichPC' }
+          Log '--quit: process stopped'
 
           $null = RunWait "$env:LOCALAPPDATA\Programs\WhichPC\Uninstall.exe" '/S'
           for ($i = 0; $i -lt 30 -and (Test-Path $exe); $i++) { Start-Sleep -Milliseconds 500 }
           if (Test-Path $exe) { throw 'uninstall left WhichPC.exe behind' }
           if (Test-Path HKCU:\Software\WhichPC) { throw 'uninstall left settings behind' }
-          'Smoke test passed.'
+          Log 'Uninstall: files and settings removed'
+          Log 'Smoke test passed.'
+          $report | Set-Content report.txt -Encoding utf8
+          "## WhichPC Windows smoke test`n" + (($report | ForEach-Object { "    $_" }) -join "`n") | Add-Content $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-screenshots
           path: "*.png"
-      - name: Screenshot previews (base64 JPEG, for reading without downloading artifacts)
+      - name: Screenshot previews and report (readable from the log alone)
         if: always()
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Drawing
           $jpeg = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
           $params = New-Object System.Drawing.Imaging.EncoderParameters 1
-          $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 80L
-          Get-ChildItem *.png | ForEach-Object {
+          $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 70L
+          Get-ChildItem crop-*.png | ForEach-Object {
             $img = [System.Drawing.Image]::FromFile($_.FullName)
-            $scale = [Math]::Min(1.0, 960.0 / $img.Width)
+            $scale = [Math]::Min(1.0, 600.0 / $img.Width)
             $bmp = New-Object System.Drawing.Bitmap $img, ([int]($img.Width * $scale)), ([int]($img.Height * $scale))
             $ms = New-Object System.IO.MemoryStream
             $bmp.Save($ms, $jpeg, $params)
-            "=== BEGIN $($_.BaseName) ==="
+            "=== BEGIN $($_.BaseName) ($($ms.Length) bytes) ==="
             [Convert]::ToBase64String($ms.ToArray(), 'InsertLineBreaks')
             "=== END $($_.BaseName) ==="
             $img.Dispose(); $bmp.Dispose()
           }
+          if (Test-Path report.txt) { '=== REPORT ==='; Get-Content report.txt }
