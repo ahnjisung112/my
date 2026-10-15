@@ -1,5 +1,24 @@
 # dwg_sheet_export
 
+두 가지 형태로 제공됩니다.
+
+| 형태 | 파일 | 특징 |
+|---|---|---|
+| **브라우저 도구 (HTML)** | `dist/dwg2pdf.html`, `dist/dwg2pdf_offline.html` | 설치 없이 브라우저에서 DWG를 열어 도면틀을 고르고 PDF로 저장. 파일은 PC 밖으로 나가지 않음 |
+| **명령행 도구 (Python)** | `sheetexport/` | 일괄 처리·자동화용. 벡터 PDF 출력 |
+
+## 브라우저 도구 (dwg2pdf.html)
+
+* `dist/dwg2pdf.html` — 35 KB. 처음 열 때 DWG 엔진(LibreDWG WebAssembly, 약 11 MB)과 PDF 라이브러리를 CDN에서 받습니다. 인터넷이 필요합니다.
+* `dist/dwg2pdf_offline.html` — 약 15 MB. 엔진을 파일 안에 내장해 인터넷 없이 동작합니다. `python build_html.py --offline` 으로 만듭니다 (git 에는 올리지 않음).
+
+사용: 파일을 브라우저로 열고 → DWG 끌어다 놓기 → 도면 카드에서 선택 → **선택 도면 → PDF 저장** (여러 장이면 한 PDF로 묶임) 또는 **개별 PDF (ZIP)**. DXF 변환 저장도 됩니다.
+출력은 A3 가로(기본) 200 dpi 이미지 기반 PDF이며 해상도·용지·흑백/컬러·선 굵기를 바꿀 수 있습니다.
+
+소스는 `dwg2pdf.src.html`(본문 조각)이고 `build_html.py` 가 완전한 HTML 로 묶습니다. 브라우저 안에서 도면틀 인식 로직은 아래 Python 과 같은 규칙입니다.
+
+## 명령행 도구 (sheetexport)
+
 한 시트(모델 공간)에 여러 도면이 나란히 들어 있는 DWG 파일에서 **도면틀(도곽)을 자동으로 인식**하고,
 원하는 도면만 골라 **개별 PDF**로 출력하는 도구입니다.
 

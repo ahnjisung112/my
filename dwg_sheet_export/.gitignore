@@ -2,6 +2,8 @@ node_modules/
 __pycache__/
 *.pyc
 output/
+dist/dwg2pdf_offline.html
+dist/dwg2pdf.artifact.html
 *.dwg
 *.dxf
 *.pdf

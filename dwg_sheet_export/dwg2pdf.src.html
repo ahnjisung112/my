@@ -1,0 +1,586 @@
+<title>도면 분할 PDF</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- 도면틀 분할 PDF 변환기: DWG 한 시트 안의 여러 도면을 인식해 원하는 도면만 PDF로 내보낸다.
+     DWG 해석: LibreDWG(WebAssembly) / PDF: jsPDF / 묶음 저장: JSZip. 서버 없이 브라우저 안에서만 동작한다. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* 레이아웃: 상단 도구 막대 + 파일 투입구, 아래에 인식된 도면 카드 격자. 도면 용지의 흰 바탕과 제도 잉크의 남색을 기준색으로 쓴다. */
+  :root {
+    --paper: #f7f6f2;
+    --sheet: #ffffff;
+    --ink: #1c2230;
+    --ink-soft: #5b6472;
+    --rule: #d8d4cb;
+    --accent: #1f4e9c;
+    --accent-ink: #ffffff;
+    --accent-soft: #e4ecf8;
+    --ok: #1d7a4a;
+    --warn: #a3650f;
+    --bad: #b2362b;
+    --font-body: "IBM Plex Sans KR", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "NanumGothic", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "Consolas", "D2Coding", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15181e; --sheet: #1d2129; --ink: #e8e9ec; --ink-soft: #9aa3b2; --rule: #343a46;
+      --accent: #7fa7e6; --accent-ink: #0f1a2e; --accent-soft: #24324a; --ok: #5cc48a; --warn: #e0a84a; --bad: #ef7f74;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #15181e; --sheet: #1d2129; --ink: #e8e9ec; --ink-soft: #9aa3b2; --rule: #343a46;
+    --accent: #7fa7e6; --accent-ink: #0f1a2e; --accent-soft: #24324a; --ok: #5cc48a; --warn: #e0a84a; --bad: #ef7f74;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font-size: 1.5rem; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--ink-soft); margin: 4px 0 0; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+  .engine { font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+
+  .drop { border: 1.5px dashed var(--rule); background: var(--sheet); border-radius: 8px; padding: 28px 20px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; transition: border-color .15s, background .15s; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { font-weight: 600; }
+  .drop .hint { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
+  button, .btn { font: inherit; font-weight: 500; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink);
+    padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+  .panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; margin-top: 16px; }
+  .fileinfo { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 0.9rem; color: var(--ink-soft); }
+  .fileinfo b { color: var(--ink); font-weight: 500; }
+  .opts { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; }
+  .opts label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+  select, input[type=number] { font: inherit; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 5px; background: var(--sheet); color: var(--ink); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+  .actions .sp { flex: 1; }
+  .status { font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink-soft); margin-top: 10px; min-height: 1.2em; white-space: pre-wrap; }
+  .bar { height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 14px; }
+  .card { border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .thumb { aspect-ratio: 1.414; background: #fff; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--rule); }
+  .thumb img { max-width: 100%; max-height: 100%; display: block; }
+  .thumb .ph { color: #999; font-size: 0.8rem; }
+  .card label { display: flex; gap: 8px; padding: 8px 10px; cursor: pointer; align-items: flex-start; }
+  .card input { margin-top: 4px; }
+  .meta { min-width: 0; }
+  .meta .no { font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-soft); }
+  .meta .ttl { font-weight: 500; font-size: 0.92rem; overflow-wrap: anywhere; }
+  .meta .sc { font-size: 0.78rem; color: var(--ink-soft); }
+  .empty { color: var(--ink-soft); padding: 8px 0; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 14px; font-size: 0.9rem; }
+  .steps div { border-left: 3px solid var(--accent-soft); padding: 2px 0 2px 10px; }
+  .steps b { display: block; font-weight: 600; }
+  .steps p { margin: 2px 0 0; color: var(--ink-soft); }
+  .err { color: var(--bad); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>도면 분할 PDF</h1>
+      <p class="sub">한 시트에 여러 도면이 들어 있는 DWG에서 도면틀을 인식해 원하는 도면만 PDF로 내보냅니다. 파일은 이 브라우저 안에서만 처리됩니다.</p>
+    </div>
+    <div class="engine"><span class="dot" id="engineDot"></span><span id="engineText">DWG 엔진 불러오는 중…</span></div>
+  </header>
+
+  <div class="drop" id="drop">
+    <strong>DWG 또는 DXF 파일을 여기에 놓거나 선택하세요</strong>
+    <p class="hint">AutoCAD R13 ~ 2018 형식(AC1012 ~ AC1032)을 읽습니다. 모델 공간 기준이며 배치(레이아웃) 탭의 뷰포트는 지원하지 않습니다.</p>
+    <button type="button" id="pickBtn">파일 선택</button>
+    <input type="file" id="fileInput" accept=".dwg,.dxf">
+  </div>
+
+  <div class="steps" id="steps">
+    <div><b>1. 읽기</b><p>DWG를 브라우저 안에서 해석합니다. 업로드되지 않습니다.</p></div>
+    <div><b>2. 도면틀 인식</b><p>가로세로 비율이 √2인 블록이나 사각형을 도면틀로 잡고, 표제란의 도면명·도면번호·축척을 읽습니다.</p></div>
+    <div><b>3. 선택 후 내보내기</b><p>필요한 도면만 골라 한 PDF로 묶거나 개별 PDF(ZIP)로 저장합니다.</p></div>
+  </div>
+
+  <div class="panel" id="result" hidden>
+    <div class="fileinfo" id="fileinfo"></div>
+    <div class="opts">
+      <label>용지 <select id="paper"><option value="A3" selected>A3</option><option value="A2">A2</option><option value="A1">A1</option><option value="A4">A4</option></select></label>
+      <label>해상도 <select id="dpi"><option value="150">150 dpi</option><option value="200" selected>200 dpi</option><option value="300">300 dpi</option></select></label>
+      <label>색상 <select id="color"><option value="mono" selected>흑백</option><option value="color">원본 색상</option></select></label>
+      <label>선 굵기 <select id="lw"><option value="0.18">0.18 mm</option><option value="0.25" selected>0.25 mm</option><option value="0.35">0.35 mm</option></select></label>
+    </div>
+    <div class="actions">
+      <button type="button" id="selAll">전체 선택</button>
+      <button type="button" id="selNone">선택 해제</button>
+      <span class="sp"></span>
+      <button type="button" id="dxfBtn">DXF로 저장</button>
+      <button type="button" id="zipBtn">개별 PDF (ZIP)</button>
+      <button type="button" class="primary" id="pdfBtn">선택 도면 → PDF 저장</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="grid" id="grid"></div>
+    <p class="empty" id="noFrames" hidden>도면틀을 찾지 못했습니다. 도면틀이 A열 용지 비율(√2)의 블록이나 사각형으로 그려져 있어야 합니다.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+/* ───────── 설정 ───────── */
+// LibreDWG(WebAssembly) 위치. 오프라인 빌드는 window.DWG_VENDOR 로 내장 blob URL을 넘긴다.
+const LIBREDWG_BASE = (document.querySelector('meta[name="libredwg-base"]')?.content)
+  || 'https://cdn.jsdelivr.net/npm/@mlightcad/libredwg-web@0.8.0/';
+const PAPER_MM = { A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841] };
+const SQRT2 = Math.SQRT2;
+const TITLE_LAYER = /도곽|TITLE|도면명/i;
+const NUMBER_RE = /^[A-Z0-9]+(?:-[A-Z0-9]+){2,}$/;
+const SCALE_RE = /^(?:S\s*=\s*)?1\s*[:/]\s*\d+$/i;
+const FONT_STACK = `'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','NanumGothic','Noto Sans KR',sans-serif`;
+
+/* ───────── DOM ───────── */
+const $ = (id) => document.getElementById(id);
+const ui = {
+  dot: $('engineDot'), engineText: $('engineText'), drop: $('drop'), file: $('fileInput'), pick: $('pickBtn'),
+  result: $('result'), fileinfo: $('fileinfo'), grid: $('grid'), status: $('status'), bar: $('barFill'), noFrames: $('noFrames'),
+  paper: $('paper'), dpi: $('dpi'), color: $('color'), lw: $('lw'),
+  selAll: $('selAll'), selNone: $('selNone'), pdfBtn: $('pdfBtn'), zipBtn: $('zipBtn'), dxfBtn: $('dxfBtn'), steps: $('steps'),
+};
+const state = { lib: null, FileType: null, db: null, frames: [], fileName: '', fileBuf: null, blocks: new Map(), busy: false };
+
+function setStatus(msg, cls = '') { ui.status.textContent = msg; ui.status.className = 'status ' + cls; }
+function setProgress(f) { ui.bar.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; }
+function setBusy(b) { state.busy = b; for (const k of ['pdfBtn', 'zipBtn', 'dxfBtn', 'pick']) ui[k].disabled = b; }
+
+/* ───────── 엔진 로딩 ───────── */
+async function loadEngine() {
+  try {
+    let mod, wasmInstance;
+    if (window.DWG_VENDOR) {                       // 오프라인 빌드: 내장 blob
+      mod = await import(window.DWG_VENDOR.distUrl);
+      wasmInstance = await mod.createModule({ locateFile: (f) => f.endsWith('.wasm') ? window.DWG_VENDOR.wasmUrl : f });
+    } else {
+      mod = await import(LIBREDWG_BASE + 'dist/libredwg-web.js');
+      wasmInstance = await mod.createModule({ locateFile: (f) => LIBREDWG_BASE + 'wasm/' + f });
+    }
+    state.lib = mod.LibreDwg.createByWasmInstance(wasmInstance);
+    state.FileType = mod.Dwg_File_Type;
+    ui.dot.className = 'dot ok'; ui.engineText.textContent = 'LibreDWG 준비됨';
+  } catch (e) {
+    ui.dot.className = 'dot bad'; ui.engineText.textContent = 'DWG 엔진을 불러오지 못했습니다 (인터넷 연결 확인)';
+    console.error(e);
+  }
+}
+
+/* ───────── 기하 도우미 ───────── */
+const Box = {
+  empty: () => ({ minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }),
+  add(b, x, y) { if (x < b.minX) b.minX = x; if (x > b.maxX) b.maxX = x; if (y < b.minY) b.minY = y; if (y > b.maxY) b.maxY = y; return b; },
+  addBox(b, o) { if (!o) return b; Box.add(b, o.minX, o.minY); return Box.add(b, o.maxX, o.maxY); },
+  valid: (b) => b && b.minX <= b.maxX && b.minY <= b.maxY,
+  w: (b) => b.maxX - b.minX, h: (b) => b.maxY - b.minY,
+  contains: (o, i, s = 0) => i.minX >= o.minX - s && i.minY >= o.minY - s && i.maxX <= o.maxX + s && i.maxY <= o.maxY + s,
+  intersects: (a, b) => !(a.maxX < b.minX || b.maxX < a.minX || a.maxY < b.minY || b.maxY < a.minY),
+  inside: (b, x, y) => x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY,
+  expand(b, m) { return { minX: b.minX - m, minY: b.minY - m, maxX: b.maxX + m, maxY: b.maxY + m }; },
+};
+const ratioOk = (w, h, tol = 0.03) => w > 0 && h > 0 && Math.abs(Math.max(w, h) / Math.min(w, h) - SQRT2) <= tol;
+
+function blockEntry(name) { return state.blocks.get(name) || null; }
+
+// 블록 정의의 지역 좌표 경계 (블록 이름별 캐시)
+const blockBoxCache = new Map();
+function blockLocalBox(name, depth = 0) {
+  if (blockBoxCache.has(name)) return blockBoxCache.get(name);
+  blockBoxCache.set(name, null);                  // 재귀 참조 방지
+  const blk = blockEntry(name);
+  let box = null;
+  if (blk && depth < 6) {
+    box = Box.empty();
+    for (const e of blk.entities || []) Box.addBox(box, entityBox(e, depth + 1));
+    if (!Box.valid(box)) box = null;
+  }
+  blockBoxCache.set(name, box);
+  return box;
+}
+
+function entityBox(e, depth = 0) {
+  const b = Box.empty();
+  const P = (p) => { if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) Box.add(b, p.x, p.y); };
+  switch (e.type) {
+    case 'LINE': case 'RAY': case 'XLINE': P(e.startPoint); P(e.endPoint); break;
+    case 'LWPOLYLINE': case 'POLYLINE2D': case 'POLYLINE3D': case 'LEADER': case 'MLINE':
+      for (const v of e.vertices || []) P(v); break;
+    case 'CIRCLE':
+      if (e.center && e.radius) { Box.add(b, e.center.x - e.radius, e.center.y - e.radius); Box.add(b, e.center.x + e.radius, e.center.y + e.radius); } break;
+    case 'ARC':   // 호는 양 끝점과 지나가는 사분점만으로 경계를 잡는다 (반지름이 큰 짧은 호가 범위를 부풀리지 않도록)
+      if (e.center && e.radius) {
+        const TAU = Math.PI * 2, cx = e.center.x, cy = e.center.y, r = e.radius;
+        const pt = (a) => Box.add(b, cx + r * Math.cos(a), cy + r * Math.sin(a));
+        let a0 = (e.startAngle || 0) % TAU, a1 = (e.endAngle ?? TAU) % TAU;
+        if (a0 < 0) a0 += TAU; if (a1 < 0) a1 += TAU; if (a1 <= a0) a1 += TAU;
+        pt(a0); pt(a1);
+        for (let q = 0; q < 4; q++) { let a = q * Math.PI / 2; while (a < a0) a += TAU; if (a <= a1) pt(a); }
+      } break;
+    case 'ELLIPSE':
+      if (e.center && e.majorAxisEndPoint) { const r = Math.hypot(e.majorAxisEndPoint.x, e.majorAxisEndPoint.y);
+        Box.add(b, e.center.x - r, e.center.y - r); Box.add(b, e.center.x + r, e.center.y + r); } break;
+    case 'TEXT': P(e.startPoint); if (e.startPoint && !(e.rotation || 0)) { const h = +e.textHeight || 0;
+        Box.add(b, e.startPoint.x + h * 0.8 * String(e.text || '').length * (e.xScale || 1), e.startPoint.y + h); } break;
+    case 'ATTRIB': case 'ATTDEF': P(e.text?.startPoint); break;
+    case 'MTEXT': P(e.insertionPoint); if (e.insertionPoint && e.rectWidth) { Box.add(b, e.insertionPoint.x + e.rectWidth, e.insertionPoint.y - (e.rectHeight || e.textHeight || 0)); } break;
+    case 'DIMENSION': P(e.definitionPoint); P(e.textPoint); P(e.subDefinitionPoint1); P(e.subDefinitionPoint2); break;
+    case 'SPLINE': for (const p of (e.controlPoints?.length ? e.controlPoints : e.fitPoints) || []) P(p); break;
+    case 'SOLID': case '3DFACE': case 'TRACE': for (const p of e.points || []) P(p); break;
+    case 'POINT': P(e.position); break;
+    case 'INSERT': {
+      const lb = blockLocalBox(e.name, depth);
+      if (!lb) break;
+      const blk = blockEntry(e.name);
+      const base = blk?.basePoint || { x: 0, y: 0 };
+      const sx = e.xScale ?? 1, sy = e.yScale ?? 1, rot = e.rotation || 0, c = Math.cos(rot), s = Math.sin(rot);
+      const ip = e.insertionPoint || { x: 0, y: 0 };
+      for (const [x, y] of [[lb.minX, lb.minY], [lb.minX, lb.maxY], [lb.maxX, lb.minY], [lb.maxX, lb.maxY]]) {
+        const lx = (x - base.x) * sx, ly = (y - base.y) * sy;
+        Box.add(b, ip.x + lx * c - ly * s, ip.y + lx * s + ly * c);
+      }
+      break;
+    }
+    default: return null;                          // HATCH 등: 경계 미상
+  }
+  return Box.valid(b) ? b : null;
+}
+
+/* ───────── 도면틀 인식 ───────── */
+function rectOfPolyline(e) {
+  let pts = (e.vertices || []).map((v) => ({ x: v.x, y: v.y }));
+  if (pts.length === 5 && Math.hypot(pts[0].x - pts[4].x, pts[0].y - pts[4].y) < 1e-6) pts = pts.slice(0, 4);
+  if (pts.length !== 4) return null;
+  const xs = pts.map((p) => p.x).sort((a, b) => a - b), ys = pts.map((p) => p.y).sort((a, b) => a - b);
+  const x0 = xs[0], x1 = xs[3], y0 = ys[0], y1 = ys[3];
+  const eps = 1e-3 * Math.max(x1 - x0, y1 - y0, 1);
+  for (const p of pts) {
+    if (!(Math.abs(p.x - x0) < eps || Math.abs(p.x - x1) < eps)) return null;
+    if (!(Math.abs(p.y - y0) < eps || Math.abs(p.y - y1) < eps)) return null;
+  }
+  return { minX: x0, minY: y0, maxX: x1, maxY: y1 };
+}
+
+function detectFrames(db) {
+  const ents = db.entities || [];
+  // 도면틀 최소 크기: 전체 도면 범위의 2%. 헤더의 EXTMIN/EXTMAX 가 있으면 그것을 쓴다 (블록 안의 잡객체로 범위가 부풀지 않도록).
+  const hx = db.header?.EXTMIN, hX = db.header?.EXTMAX;
+  let total = (hx && hX && Number.isFinite(hx.x) && hX.x > hx.x && hX.y > hx.y) ? { minX: hx.x, minY: hx.y, maxX: hX.x, maxY: hX.y } : null;
+  if (!total) { total = Box.empty(); for (const e of ents) if (e.type !== 'HATCH' && e.type !== 'INSERT') Box.addBox(total, entityBox(e)); }
+  const minSize = Box.valid(total) ? 0.02 * Math.max(Box.w(total), Box.h(total)) : 0;
+  const cands = [];
+  const blockOk = new Map();
+  for (const e of ents) {
+    if (e.type === 'INSERT') {
+      if (!blockOk.has(e.name)) { const lb = blockLocalBox(e.name); blockOk.set(e.name, !!lb && ratioOk(Box.w(lb), Box.h(lb))); }
+      if (!blockOk.get(e.name)) continue;
+      const b = entityBox(e);
+      if (b && Math.min(Box.w(b), Box.h(b)) >= minSize && ratioOk(Box.w(b), Box.h(b))) cands.push({ box: b, source: '블록 ' + e.name });
+    } else if (e.type === 'LWPOLYLINE' || e.type === 'POLYLINE2D') {
+      const r = rectOfPolyline(e);
+      if (r && Math.min(Box.w(r), Box.h(r)) >= minSize && ratioOk(Box.w(r), Box.h(r))) cands.push({ box: r, source: '사각형 (' + e.layer + ')' });
+    }
+  }
+  cands.sort((a, b) => Box.w(b.box) * Box.h(b.box) - Box.w(a.box) * Box.h(a.box));
+  const kept = [];
+  for (const c of cands) {
+    const slack = 0.01 * Math.max(Box.w(c.box), Box.h(c.box));
+    if (!kept.some((k) => Box.contains(k.box, c.box, slack))) kept.push(c);
+  }
+  if (kept.length) {
+    const rowH = Math.min(...kept.map((k) => Box.h(k.box))) * 0.5;
+    kept.sort((a, b) => (Math.round(b.box.maxY / rowH) - Math.round(a.box.maxY / rowH)) || (a.box.minX - b.box.minX));
+  }
+  return kept.map((k, i) => ({ index: i + 1, box: k.box, source: k.source, title: null, number: null, scale: null }));
+}
+
+function mtextPlain(t) {
+  return String(t || '').replace(/\\P/g, ' ').replace(/\\[A-Za-z][^;\\]*;/g, '').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim();
+}
+function collectTexts(db) {
+  const out = [];
+  for (const e of db.entities || []) {
+    if (e.type === 'TEXT' && e.startPoint) {
+      const text = String(e.text || '').replace(/\s+/g, ' ').trim();
+      if (text) out.push({ text, layer: e.layer || '', height: +e.textHeight || 0, x: e.startPoint.x, y: e.startPoint.y });
+    } else if (e.type === 'MTEXT' && e.insertionPoint) {
+      const text = mtextPlain(e.text);
+      if (text) out.push({ text, layer: e.layer || '', height: +e.textHeight || 0, x: e.insertionPoint.x, y: e.insertionPoint.y });
+    }
+  }
+  return out;
+}
+function parseIndex(texts) {               // 도면목록표: 도면번호 - 도면명 - 축척
+  const index = new Map();
+  for (const t of texts) {
+    if (!NUMBER_RE.test(t.text)) continue;
+    const tol = Math.max(t.height * 0.6, 1e-6);
+    const row = texts.filter((o) => o !== t && Math.abs(o.y - t.y) <= tol && o.x > t.x).sort((a, b) => a.x - b.x);
+    const name = row.find((o) => !NUMBER_RE.test(o.text) && !SCALE_RE.test(o.text))?.text;
+    const scale = row.find((o) => SCALE_RE.test(o.text))?.text || null;
+    if (name) index.set(name, { number: t.text, scale });
+  }
+  return index;
+}
+function similarity(a, b) {               // 간단한 유사도 (공통 접두/문자 비율)
+  if (a === b) return 1;
+  const sa = new Set(a), sb = new Set(b); let common = 0;
+  for (const ch of sa) if (sb.has(ch)) common++;
+  return (2 * common) / (sa.size + sb.size);
+}
+function assignTitles(frames, texts) {
+  const index = parseIndex(texts);
+  for (const f of frames) {
+    const inside = texts.filter((t) => Box.inside(f.box, t.x, t.y));
+    const nums = new Set(inside.filter((t) => NUMBER_RE.test(t.text)).map((t) => t.text));
+    if (nums.size === 1) f.number = [...nums][0];
+    const pref = inside.filter((t) => TITLE_LAYER.test(t.layer));
+    const pool = pref.length ? pref : inside.filter((t) => !NUMBER_RE.test(t.text) && !SCALE_RE.test(t.text));
+    if (pool.length) f.title = pool.reduce((a, b) => (b.height > a.height || (b.height === a.height && b.text.length > a.text.length)) ? b : a).text;
+    if (f.title && index.size) {
+      let hit = index.get(f.title);
+      if (!hit) { let best = 0; for (const [name, v] of index) { const s = similarity(f.title, name); if (s > best && s >= 0.85) { best = s; hit = v; } } }
+      if (hit) { f.number = f.number || hit.number; f.scale = f.scale || hit.scale; }
+    }
+  }
+}
+
+/* ───────── 렌더링 ───────── */
+function modelSpaceEntry(db) { return (db.tables?.BLOCK_RECORD?.entries || []).find((b) => /^\*Model_Space$/i.test(b.name)); }
+function frameEntities(db, frame) {
+  const region = Box.expand(frame.box, 0.01 * Math.max(Box.w(frame.box), Box.h(frame.box)));
+  const src = modelSpaceEntry(db)?.entities || db.entities || [];
+  return src.filter((e) => { const b = entityBox(e); return !b || Box.intersects(b, region); });
+}
+// SVG 변환기는 *Model_Space 블록과 모든 블록 정의를 통째로 그리므로, 도면틀에 필요한 객체와 블록만 남긴 사본을 만든다.
+function prunedDb(db, ents) {
+  const needed = new Set();
+  const visit = (list) => {
+    for (const e of list) {
+      const n = (e.type === 'INSERT' || e.type === 'DIMENSION') ? e.name : null;
+      if (n && !needed.has(n)) { needed.add(n); const b = blockEntry(n); if (b) visit(b.entities || []); }
+    }
+  };
+  visit(ents);
+  const ms = modelSpaceEntry(db);
+  const entries = (db.tables.BLOCK_RECORD.entries || []).filter((b) => needed.has(b.name));
+  entries.push({ ...(ms || { name: '*Model_Space' }), entities: ents });
+  return { ...db, entities: ents, tables: { ...db.tables, BLOCK_RECORD: { ...db.tables.BLOCK_RECORD, entries } } };
+}
+function paperFor(frame, paperName) {
+  let [w, h] = PAPER_MM[paperName] || PAPER_MM.A3;
+  if (Box.h(frame.box) > Box.w(frame.box)) [w, h] = [h, w];
+  return { w, h };
+}
+function rawSvgFor(frame) {          // 변환 결과는 도면틀별로 한 번만 만들고 재사용한다 (가장 느린 단계)
+  if (!frame.rawSvg) frame.rawSvg = state.lib.dwg_to_svg(prunedDb(state.db, frameEntities(state.db, frame)));
+  return frame.rawSvg;
+}
+function frameSvg(frame, { mono, lineMm, pxW, pxH, paper }) {
+  let svg = rawSvgFor(frame);
+  const b = frame.box;
+  // non-scaling-stroke 이므로 선 굵기는 출력 픽셀 단위로 준다 (용지 mm -> 픽셀 환산)
+  const strokePx = Math.max(0.6, (lineMm / paper.w) * pxW).toFixed(3);
+  // 흰색 채움(배경 가림용 해치, 로고)은 종이색이므로 흑백에서도 흰색으로 둔다. 흰 글자만 검게 바꾼다.
+  const WHITE = `[fill="rgb(255,255,255)"],[fill="#ffffff"]`;
+  // non-scaling-stroke: 블록 배율(×30 등)에 선 굵기가 따라 커지지 않도록 한다
+  const css = `line,path,circle,ellipse,polyline,polygon,rect{vector-effect:non-scaling-stroke}text{font-family:${FONT_STACK};stroke:none}` + (mono
+    ? `g[stroke]{stroke:#000 !important}[fill]:not([fill="none"]):not([fill="rgb(255,255,255)"]):not([fill="#ffffff"]){fill:#000 !important}${WHITE}{fill:#fff !important}text{fill:#000 !important}`
+    : `[stroke="rgb(255,255,255)"],[stroke="#ffffff"]{stroke:#000 !important}${WHITE}{fill:#fff !important}g[fill="rgb(255,255,255)"] text,g[fill="#ffffff"] text{fill:#000 !important}`);
+  svg = svg.replace(/<svg[^>]*>/, `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${b.minX} ${-b.maxY} ${Box.w(b)} ${Box.h(b)}" width="${pxW}" height="${pxH}" preserveAspectRatio="xMidYMid meet"><style>${css}</style>`);
+  svg = svg.replace(/stroke-width="0\.1%"/, `stroke-width="${strokePx}"`);
+  // 변환기가 문자 안의 & 와 제어문자를 이스케이프하지 않으므로 XML 로 유효하게 만든다
+  svg = svg.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g, '&amp;').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  return svg;
+}
+function svgToCanvas(svgText, pxW, pxH) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }));
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = pxW; c.height = pxH;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, pxW, pxH); ctx.drawImage(img, 0, 0, pxW, pxH);
+      URL.revokeObjectURL(url); resolve(c);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG 렌더링 실패')); };
+    img.src = url;
+  });
+}
+function renderOptions() {
+  return { paperName: ui.paper.value, dpi: +ui.dpi.value, mono: ui.color.value === 'mono', lineMm: +ui.lw.value };
+}
+async function renderFrameCanvas(frame, opts) {
+  const paper = paperFor(frame, opts.paperName);
+  const pxW = Math.round(paper.w / 25.4 * opts.dpi), pxH = Math.round(paper.h / 25.4 * opts.dpi);
+  const svg = frameSvg(frame, { mono: opts.mono, lineMm: opts.lineMm, pxW, pxH, paper });
+  return { canvas: await svgToCanvas(svg, pxW, pxH), paper };
+}
+async function renderThumb(frame) {
+  const paper = paperFor(frame, 'A3');
+  const pxW = 560, pxH = Math.round(560 * paper.h / paper.w);
+  const svg = frameSvg(frame, { mono: true, lineMm: 0.35, pxW, pxH, paper });
+  const c = await svgToCanvas(svg, pxW, pxH);
+  return c.toDataURL('image/png');
+}
+
+/* ───────── PDF ───────── */
+function frameFileName(f) {
+  const parts = [String(f.index).padStart(2, '0')];
+  if (f.number) parts.push(f.number);
+  parts.push(f.title || 'untitled');
+  return parts.join('_').replace(/[\\/:*?"<>|\r\n\t]+/g, '_').trim().slice(0, 80);
+}
+async function framesToPdf(frames, opts, onProgress) {
+  const { jsPDF } = window.jspdf;
+  let doc = null;
+  for (let i = 0; i < frames.length; i++) {
+    const { canvas, paper } = await renderFrameCanvas(frames[i], opts);
+    const orient = paper.w >= paper.h ? 'l' : 'p';
+    if (!doc) doc = new jsPDF({ orientation: orient, unit: 'mm', format: [paper.w, paper.h], compress: true });
+    else doc.addPage([paper.w, paper.h], orient);
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, paper.w, paper.h);
+    onProgress?.((i + 1) / frames.length);
+  }
+  return doc.output('blob');
+}
+async function saveFile(filename, blob) {
+  const dl = window.claude?.use ? await window.claude.use('downloads').catch(() => null) : null;
+  if (dl) { await dl.save({ filename, data: blob }); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+
+/* ───────── 화면 ───────── */
+function selectedFrames() { return state.frames.filter((f) => $('f' + f.index).checked); }
+function renderCards() {
+  ui.grid.innerHTML = '';
+  ui.noFrames.hidden = state.frames.length > 0;
+  for (const f of state.frames) {
+    const card = document.createElement('div'); card.className = 'card'; card.id = 'card' + f.index;
+    card.innerHTML = `<div class="thumb"><span class="ph">미리보기 생성 중…</span></div>
+      <label><input type="checkbox" id="f${f.index}"><span class="meta">
+        <span class="no">#${f.index}${f.number ? ' · ' + esc(f.number) : ''}</span><br>
+        <span class="ttl">${esc(f.title || '(제목 없음)')}</span><br>
+        <span class="sc">${f.scale ? '축척 ' + esc(f.scale) + ' · ' : ''}${esc(f.source)}</span></span></label>`;
+    card.querySelector('input').addEventListener('change', (ev) => card.classList.toggle('sel', ev.target.checked));
+    ui.grid.appendChild(card);
+  }
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+async function makeThumbs() {
+  for (let i = 0; i < state.frames.length; i++) {
+    const f = state.frames[i];
+    const holder = document.querySelector('#card' + f.index + ' .thumb');
+    setStatus(`미리보기 생성 중… ${i + 1}/${state.frames.length} (완료 후 내보내기가 빨라집니다)`);
+    await new Promise((r) => setTimeout(r, 0));
+    try { const url = await renderThumb(f); holder.innerHTML = `<img alt="${esc(f.title || '')} 미리보기" src="${url}">`; }
+    catch (e) { holder.innerHTML = '<span class="ph">미리보기 실패</span>'; }
+    setProgress((i + 1) / state.frames.length);
+  }
+  setStatus(state.frames.length ? `도면틀 ${state.frames.length}개. 내보낼 도면을 선택하세요.` : '도면틀을 찾지 못했습니다.');
+}
+
+async function openFile(file) {
+  if (!state.lib) { setStatus('DWG 엔진이 아직 준비되지 않았습니다.', 'err'); return; }
+  setBusy(true); setProgress(0);
+  ui.result.hidden = false; ui.steps.hidden = true; ui.grid.innerHTML = ''; ui.fileinfo.textContent = '';
+  setStatus('파일 읽는 중…');
+  try {
+    const buf = await file.arrayBuffer();
+    state.fileName = file.name; state.fileBuf = buf;
+    const isDxf = /\.dxf$/i.test(file.name);
+    await new Promise((r) => setTimeout(r, 30));
+    const t0 = performance.now();
+    const ptr = state.lib.dwg_read_data(buf, isDxf ? state.FileType.DXF : state.FileType.DWG);
+    if (!ptr) throw new Error('파일을 해석하지 못했습니다. 손상되었거나 지원하지 않는 형식입니다.');
+    const version = state.lib.dwg_get_version_type(ptr);
+    const db = state.lib.convert(ptr);
+    state.lib.dwg_free(ptr);
+    state.db = db;
+    state.blocks = new Map((db.tables?.BLOCK_RECORD?.entries || []).map((b) => [b.name, b]));
+    blockBoxCache.clear();
+    setStatus('도면틀 인식 중…');
+    await new Promise((r) => setTimeout(r, 10));
+    state.frames = detectFrames(db);
+    assignTitles(state.frames, collectTexts(db));
+    const ms = Math.round(performance.now() - t0);
+    ui.fileinfo.innerHTML = `<span><b>${esc(file.name)}</b></span><span>${esc(version?.description || version?.hdr || '')}</span>` +
+      `<span>객체 <b>${(db.entities || []).length.toLocaleString()}</b>개</span><span>도면틀 <b>${state.frames.length}</b>개</span><span>${ms.toLocaleString()} ms</span>`;
+    renderCards();
+    ui.dxfBtn.disabled = isDxf;
+    setStatus(state.frames.length ? `도면틀 ${state.frames.length}개를 찾았습니다. 내보낼 도면을 선택하세요.` : '도면틀을 찾지 못했습니다.');
+    setBusy(false); ui.dxfBtn.disabled = isDxf;
+    await makeThumbs();
+  } catch (e) {
+    console.error(e); setStatus('오류: ' + (e.message || e), 'err'); setBusy(false);
+  }
+}
+
+async function exportPdf(zip) {
+  const sel = selectedFrames();
+  if (!sel.length) { setStatus('먼저 내보낼 도면을 선택하세요.', 'err'); return; }
+  setBusy(true); setProgress(0);
+  const opts = renderOptions();
+  const stem = state.fileName.replace(/\.[^.]+$/, '');
+  try {
+    if (!zip) {
+      setStatus(`PDF 생성 중… (${sel.length}장)`);
+      const blob = await framesToPdf(sel, opts, setProgress);
+      await saveFile(sel.length === 1 ? frameFileName(sel[0]) + '.pdf' : stem + '_선택도면.pdf', blob);
+      setStatus(`완료: ${sel.length}장을 PDF로 저장했습니다.`);
+    } else {
+      const z = new JSZip();
+      for (let i = 0; i < sel.length; i++) {
+        setStatus(`PDF 생성 중… ${i + 1}/${sel.length}`);
+        z.file(frameFileName(sel[i]) + '.pdf', await framesToPdf([sel[i]], opts));
+        setProgress((i + 1) / sel.length);
+      }
+      await saveFile(stem + '_도면.zip', await z.generateAsync({ type: 'blob' }));
+      setStatus(`완료: PDF ${sel.length}개를 ZIP으로 저장했습니다.`);
+    }
+  } catch (e) {
+    console.error(e); setStatus('오류: ' + (e.message || e), 'err');
+  } finally { setBusy(false); }
+}
+
+async function exportDxf() {
+  if (!state.fileBuf) return;
+  setBusy(true); setStatus('DXF 변환 중…');
+  try {
+    const out = state.lib.dwg_write_dxf(state.fileBuf.slice(0));
+    if (!out) throw new Error('DXF 변환에 실패했습니다.');
+    await saveFile(state.fileName.replace(/\.[^.]+$/, '') + '.dxf', new Blob([out], { type: 'application/dxf' }));
+    setStatus('DXF 저장 완료');
+  } catch (e) { setStatus('오류: ' + (e.message || e), 'err'); }
+  finally { setBusy(false); }
+}
+
+ui.pick.addEventListener('click', () => ui.file.click());
+ui.file.addEventListener('change', () => { if (ui.file.files[0]) openFile(ui.file.files[0]); });
+for (const ev of ['dragenter', 'dragover']) ui.drop.addEventListener(ev, (e) => { e.preventDefault(); ui.drop.classList.add('over'); });
+for (const ev of ['dragleave', 'drop']) ui.drop.addEventListener(ev, (e) => { e.preventDefault(); ui.drop.classList.remove('over'); });
+ui.drop.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f) openFile(f); });
+ui.selAll.addEventListener('click', () => state.frames.forEach((f) => { $('f' + f.index).checked = true; $('card' + f.index).classList.add('sel'); }));
+ui.selNone.addEventListener('click', () => state.frames.forEach((f) => { $('f' + f.index).checked = false; $('card' + f.index).classList.remove('sel'); }));
+ui.pdfBtn.addEventListener('click', () => exportPdf(false));
+ui.zipBtn.addEventListener('click', () => exportPdf(true));
+ui.dxfBtn.addEventListener('click', exportDxf);
+window.dwgDebug = { state, entityBox, blockLocalBox, detectFrames, collectTexts, Box, rectOfPolyline, frameSvg, frameEntities, prunedDb, paperFor, svgToCanvas };
+loadEngine();
+</script>
