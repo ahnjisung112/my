@@ -1,0 +1,11 @@
+{
+  "name": "dwg-sheet-export-converter",
+  "private": true,
+  "version": "0.1.0",
+  "description": "DWG -> DXF converter used by sheetexport (LibreDWG compiled to WebAssembly)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@mlightcad/libredwg-web": "0.8.0"
+  }
+}
