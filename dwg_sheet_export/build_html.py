@@ -2,6 +2,7 @@
 
   python build_html.py                      -> dist/dwg2pdf.html          (CDN 에서 엔진을 받는 가벼운 버전)
   python build_html.py --offline            -> dist/dwg2pdf_offline.html  (엔진을 내장한 오프라인 버전, 약 15 MB)
+  python build_html.py --site               -> site/dwg2pdf/ 폴더 (웹사이트에 그대로 올리는 버전: index.html + vendor/)
 
 테스트용 옵션: --libredwg-base, --jspdf, --jszip 로 라이브러리 주소를 바꿀 수 있다.
 """
@@ -26,11 +27,27 @@ HEAD = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", action="store_true")
+    ap.add_argument("--site", nargs="?", const=str(HERE / "site" / "dwg2pdf"), help="웹사이트 배포용 폴더 경로")
     ap.add_argument("--out")
     ap.add_argument("--libredwg-base")
     ap.add_argument("--jspdf", default=JSPDF_CDN)
     ap.add_argument("--jszip", default=JSZIP_CDN)
     a = ap.parse_args()
+
+    if a.site:
+        import shutil
+        site = Path(a.site)
+        vend = site / "vendor"
+        (vend / "libredwg" / "dist").mkdir(parents=True, exist_ok=True)
+        (vend / "libredwg" / "wasm").mkdir(parents=True, exist_ok=True)
+        for sub in ("dist/libredwg-web.js", "wasm/libredwg-web.js", "wasm/libredwg-web.wasm"):
+            shutil.copy2(LIBREDWG / sub, vend / "libredwg" / sub)
+        shutil.copy2(NM / "jspdf" / "dist" / "jspdf.umd.min.js", vend / "jspdf.umd.min.js")
+        shutil.copy2(NM / "jszip" / "dist" / "jszip.min.js", vend / "jszip.min.js")
+        a.libredwg_base = "./vendor/libredwg/"
+        a.jspdf = "./vendor/jspdf.umd.min.js"
+        a.jszip = "./vendor/jszip.min.js"
+        a.out = str(site / "index.html")
 
     body = SRC.read_text(encoding="utf-8")
     # <title>/<meta> 는 head 로 옮긴다

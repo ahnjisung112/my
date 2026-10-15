@@ -7,3 +7,4 @@ dist/dwg2pdf.artifact.html
 *.dwg
 *.dxf
 *.pdf
+dist/dwg2pdf_site.zip

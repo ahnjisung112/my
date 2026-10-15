@@ -17,6 +17,21 @@
 
 소스는 `dwg2pdf.src.html`(본문 조각)이고 `build_html.py` 가 완전한 HTML 로 묶습니다. 브라우저 안에서 도면틀 인식 로직은 아래 Python 과 같은 규칙입니다.
 
+## 웹사이트에 올리기 (Cloudflare Pages 등)
+
+`python build_html.py --site` 를 실행하면 `site/dwg2pdf/` 폴더가 만들어집니다. 엔진과 PDF 라이브러리가 폴더 안에 들어 있어 외부 CDN 없이 동작합니다.
+
+```
+site/dwg2pdf/
+├─ index.html
+└─ vendor/   (LibreDWG WebAssembly 11 MB, jsPDF, JSZip)
+```
+
+* **Git 연동 사이트**: 이 `dwg2pdf` 폴더를 사이트 저장소의 배포 폴더(빌드 출력 폴더) 안에 그대로 복사해 커밋합니다. `https://사이트주소/dwg2pdf/` 로 열립니다.
+* **직접 업로드 사이트**: Cloudflare 대시보드의 Workers & Pages → 해당 프로젝트 → Create deployment 에서 기존 사이트 파일과 함께 `dwg2pdf` 폴더를 올립니다. 직접 업로드는 매번 사이트 전체를 올려야 하므로 기존 파일도 같이 넣어야 합니다.
+* **메뉴 연결**: 사이트의 메뉴나 첫 화면에 `<a href="/dwg2pdf/">DWG 도면 PDF 변환</a>` 링크를 추가합니다. 페이지 안에 넣고 싶으면 `<iframe src="/dwg2pdf/" style="width:100%;height:90vh;border:0"></iframe>` 도 됩니다.
+* Cloudflare Pages 의 파일당 25 MB 제한 안에 들어갑니다 (가장 큰 파일 11 MB).
+
 ## 명령행 도구 (sheetexport)
 
 한 시트(모델 공간)에 여러 도면이 나란히 들어 있는 DWG 파일에서 **도면틀(도곽)을 자동으로 인식**하고,
