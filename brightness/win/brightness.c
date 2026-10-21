@@ -27,6 +27,7 @@
 #include "resource.h"
 
 #define APP_NAME L"밝기조절"
+#define APP_VERSION 3   /* 실행 중인 예전 버전을 교체할 때 비교 */
 #define STEP 2.0
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE L"BrightnessControl"
@@ -68,6 +69,8 @@ static DWORD g_hide_delay = 1600;
 static int g_show_hint = 0;      /* 첫 실행 안내 문구 */
 static int g_dark = 1;           /* 패널 다크 모드 */
 static int g_taskbar_dark = 1;
+static int g_close_hover = 0;    /* 닫기(✕) 버튼 위에 커서 */
+static UINT g_msg_version, g_msg_quit;
 static DWORD g_deact_tick;       /* 바깥 클릭으로 닫힌 시각 (트레이 재클릭 토글 처리용) */
 
 #define S(v) ((int)lround((v) * (double)g_dpi / 96.0))
@@ -508,6 +511,23 @@ static RECT panel_rect_client(void) /* 창 안에서 패널(그림자 제외) �
     return r;
 }
 
+/* 닫기 버튼: 오른쪽 위 원형 (중심, 반지름) */
+static void close_geom(double *cx, double *cy, double *r)
+{
+    RECT p = panel_rect_client();
+    *r = S(11);
+    *cx = p.right - S(16) - *r;
+    *cy = p.top + S(24);
+}
+
+static int in_close(int x, int y)
+{
+    double cx, cy, r;
+    close_geom(&cx, &cy, &r);
+    double dx = x - cx, dy = y - cy, hit = r + S(4);
+    return dx * dx + dy * dy <= hit * hit;
+}
+
 static void track_geom(double *x0, double *y0, double *x1, double *y1)
 {
     RECT p = panel_rect_client();
@@ -583,8 +603,27 @@ static void render_panel(void)
     draw_text(&g_cv, L"디스플레이", rt, f_title, DT_LEFT | DT_VCENTER, primary);
     wchar_t lv[16];
     format_level(lv, 16);
-    RECT rv = {p.right - S(80), p.top + S(12), p.right - S(16), p.top + S(36)};
+    RECT rv = {p.right - S(110), p.top + S(12), p.right - S(46), p.top + S(36)};
     draw_text(&g_cv, lv, rv, f_value, DT_RIGHT | DT_VCENTER, secondary);
+
+    double ccx, ccy, ccr;
+    close_geom(&ccx, &ccy, &ccr);
+    Rgba cbg = track;
+    if (g_close_hover) cbg.a *= 2.0;
+    fill_rrect(&g_cv, ccx - ccr, ccy - ccr, ccx + ccr, ccy + ccr, ccr, cbg);
+    {
+        double k = ccr * 0.36, lw = S(1) * 0.8;
+        Rgba xc = g_close_hover ? primary : secondary;
+        int x0 = (int)(ccx - ccr), x1 = (int)(ccx + ccr) + 1, y0 = (int)(ccy - ccr), y1 = (int)(ccy + ccr) + 1;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++) {
+                double px = x + 0.5, py = y + 0.5;
+                double d1 = sdf_capsule(px, py, ccx - k, ccy - k, ccx + k, ccy + k, lw);
+                double d2 = sdf_capsule(px, py, ccx + k, ccy - k, ccx - k, ccy + k, lw);
+                double cv = cov_of(d1 < d2 ? d1 : d2);
+                if (cv > 0) blend_px(&g_cv.px[y * g_cv.w + x], xc, cv);
+            }
+    }
 
     /* 캡슐 슬라이더: 채움은 최소 트랙 높이(원)부터 시작 — macOS 제어 센터와 동일 */
     double tx0, ty0, tx1, ty1;
@@ -910,6 +949,10 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         double tx0, ty0, tx1, ty1;
         track_geom(&tx0, &ty0, &tx1, &ty1);
         int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
+        if (in_close(x, y)) {
+            hide_panel(); /* 패널만 닫고 트레이에서 계속 대기 */
+            return 0;
+        }
         if (x >= tx0 - S(4) && x <= tx1 + S(4) && y >= ty0 - S(8) && y <= ty1 + S(8)) {
             g_dragging = 1;
             SetCapture(h);
@@ -917,9 +960,25 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         }
         return 0;
     }
-    case WM_MOUSEMOVE:
+    case WM_MOUSEMOVE: {
         g_last_activity = GetTickCount();
+        int hov = in_close(GET_X_LPARAM(l), GET_Y_LPARAM(l));
+        if (hov != g_close_hover) {
+            g_close_hover = hov;
+            redraw();
+        }
+        if (hov) {
+            TRACKMOUSEEVENT t = {sizeof(t), TME_LEAVE, h, HOVER_DEFAULT};
+            TrackMouseEvent(&t);
+        }
         if (g_dragging) track_set_from_x(GET_X_LPARAM(l));
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        if (g_close_hover) {
+            g_close_hover = 0;
+            redraw();
+        }
         return 0;
     case WM_LBUTTONUP:
         if (g_dragging) {
@@ -1014,6 +1073,11 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         PostQuitMessage(0);
         return 0;
     default:
+        if (m == g_msg_version && m != 0) return APP_VERSION;
+        if (m == g_msg_quit && m != 0) {
+            do_exit();
+            return 0;
+        }
         if (m == g_taskbar_created && m != 0) {
             update_tray(1);
             return 0;
@@ -1050,14 +1114,28 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     int background = cmd && wcsstr(cmd, L"--background") != NULL;
 
     /* 중복 실행 방지: 이미 실행 중이면 그 패널을 띄우고 종료 */
-    CreateMutexW(NULL, TRUE, L"Local\\BrightnessControl_SingleInstance");
+    g_msg_version = RegisterWindowMessageW(L"BrightnessControl_Version");
+    g_msg_quit = RegisterWindowMessageW(L"BrightnessControl_Quit");
+    HANDLE mutex = CreateMutexW(NULL, TRUE, L"Local\\BrightnessControl_SingleInstance");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND other = FindWindowW(L"BrightnessControlMain", NULL);
-        if (other && !background) {
-            AllowSetForegroundWindow(ASFW_ANY);
-            PostMessageW(other, WM_APP_SHOW, 0, 0);
+        DWORD_PTR ver = 0;
+        if (other)
+            SendMessageTimeoutW(other, g_msg_version, 0, 0, SMTO_ABORTIFHUNG, 2000, &ver);
+        if (other && ver >= APP_VERSION) {
+            if (!background) {
+                AllowSetForegroundWindow(ASFW_ANY);
+                PostMessageW(other, WM_APP_SHOW, 0, 0);
+            }
+            return 0;
         }
-        return 0;
+        /* 예전 버전이 실행 중: 종료시키고(예전 버전은 WM_CLOSE 로 종료) 끝날 때까지 기다림 */
+        if (other) {
+            PostMessageW(other, g_msg_quit, 0, 0);
+            PostMessageW(other, WM_CLOSE, 0, 0);
+        }
+        DWORD wr = WaitForSingleObject(mutex, 8000);
+        if (wr != WAIT_OBJECT_0 && wr != WAIT_ABANDONED) return 0;
     }
 
     set_dpi_awareness();
