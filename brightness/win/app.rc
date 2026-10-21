@@ -1,0 +1,29 @@
+#pragma code_page(65001)
+#include <windows.h>
+#include "resource.h"
+
+IDI_APP ICON "app.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041204B0"
+    BEGIN
+      VALUE "FileDescription", "밝기조절 - 모니터 밝기 조절기"
+      VALUE "FileVersion", "1.0.0"
+      VALUE "ProductName", "밝기조절"
+      VALUE "ProductVersion", "1.0.0"
+      VALUE "OriginalFilename", "Brightness.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x412, 1200
+  END
+END
