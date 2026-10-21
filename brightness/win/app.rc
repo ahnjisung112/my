@@ -3,6 +3,8 @@
 #include "resource.h"
 
 IDI_APP ICON "app.ico"
+IDI_TRAY_WHITE ICON "tray_white.ico"
+IDI_TRAY_BLACK ICON "tray_black.ico"
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 
 VS_VERSION_INFO VERSIONINFO

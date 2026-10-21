@@ -48,7 +48,7 @@ Section "바탕화면 바로가기" SecDesktop
 SectionEnd
 
 Section "Windows 시작 시 자동 실행" SecStartup
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "BrightnessControl" '"$INSTDIR\Brightness.exe"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "BrightnessControl" '"$INSTDIR\Brightness.exe" --background'
 SectionEnd
 
 Section "Uninstall"

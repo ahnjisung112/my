@@ -16,16 +16,21 @@
 모니터가 DDC/CI를 지원하지 않으면 0~100% 전체를 검은 막으로 조절합니다.
 
 ## 조작
-- **마우스 휠** (창 위, 포커스 없어도 됨): 2% · **Shift+휠** 1% · **Ctrl+휠** 10%
-- 막대 클릭/드래그, 방향키, 우클릭 메뉴(100/75/50/25/10/0%, 숨기기, 종료)
-- 창 드래그로 이동, ✕ 종료, Esc 숨기기
-- 트레이 아이콘: 클릭 = 창 보이기/숨기기, 우클릭 = 메뉴
-- **전역 단축키**: `Ctrl+Alt+PageUp` 밝게 · `Ctrl+Alt+PageDown` 어둡게 · `Ctrl+Alt+Home` 100%
+평소에는 **작업표시줄 트레이(해 아이콘)에서 대기**하고, 쓸 때만 macOS 제어 센터 같은 패널이 나타났다가 자동으로 사라집니다.
+
+- **트레이 아이콘 위에서 마우스 휠** → 바로 밝기 조절 (패널이 잠깐 표시)
+- **트레이 아이콘 클릭** → 패널 열기 (바깥을 클릭하거나 잠시 그대로 두면 닫힘)
+- 패널 위에서 휠 / 슬라이더 드래그 / 방향키 · **Shift+휠** 1% · **Ctrl+휠** 10%
+- 트레이 우클릭: 100/75/50/25/10/0%, Windows 시작 시 자동 실행 켜기/끄기, 종료
+- **전역 단축키**: `Ctrl+Alt+PageUp` 밝게 · `Ctrl+Alt+PageDown` 어둡게 · `Ctrl+Alt+Home` 100% (화면 아래 가운데 HUD)
+- Windows 다크/라이트 모드를 따라 패널·트레이 아이콘 색이 바뀝니다.
+- `Brightness.exe --background` 로 실행하면 패널 없이 조용히 시작합니다 (자동 실행에 사용).
 
 ## 빌드 (Linux에서 Windows용으로)
 ```sh
 sudo apt install gcc-mingw-w64-x86-64 nsis
 brightness/win/build.sh   # -> win/out/Brightness.exe, win/out/BrightnessSetup.exe
+# 아이콘을 바꾸려면: cd brightness/win && python3 make_icon.py  (Pillow 필요)
 ```
 설치 프로그램은 관리자 권한 없이 `%LOCALAPPDATA%\Programs\BrightnessControl`에 설치하고,
 시작 메뉴·바탕화면 바로가기와 (선택) Windows 시작 시 자동 실행을 등록합니다.

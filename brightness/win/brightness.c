@@ -1,19 +1,22 @@
 /*
- * 밝기조절 — Windows 모니터 밝기 조절기
+ * 밝기조절 — Windows 모니터 밝기 조절기 (macOS 제어 센터 스타일)
+ *
+ *  평소에는 작업표시줄 트레이에서 대기. 다음 경우에 패널이 나타났다가 자동으로 사라짐:
+ *   - 트레이 아이콘 클릭 / 트레이 아이콘 위에서 마우스 휠
+ *   - 전역 단축키 Ctrl+Alt+PageUp / PageDown / Home (화면 아래 가운데 HUD)
  *
  *  50~100% : 모니터 자체 밝기(백라이트) 0~100% — 외장 모니터 DDC/CI, 노트북 WMI
  *   1~50%  : 백라이트 최저 + 화면 전체에 클릭이 통과하는 검은 막(오버레이)
  *     0%   : 완전 검정 (꺼진 것처럼 보임)
  *
- *  창 위에서 마우스 휠 (Shift 미세, Ctrl 크게), 막대 클릭/드래그, ↑↓
- *  전역 단축키 Ctrl+Alt+PageUp/PageDown/Home, 트레이 아이콘
+ *  실행 인자 --background : 패널을 띄우지 않고 조용히 시작 (자동 실행용)
  */
-
 #define COBJMACROS
 #define _WIN32_WINNT 0x0A00
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <commctrl.h>
 #include <physicalmonitorenumerationapi.h>
 #include <highlevelmonitorconfigurationapi.h>
 #include <objbase.h>
@@ -21,18 +24,24 @@
 #include <wbemcli.h>
 #include <math.h>
 #include <stdio.h>
+#include <wchar.h>
 #include "resource.h"
 
 #define APP_NAME L"밝기조절"
 #define STEP 2.0
+#define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+#define RUN_VALUE L"BrightnessControl"
 
 #define WM_APP_TRAY    (WM_APP + 1)
 #define WM_APP_HWREADY (WM_APP + 2)
 #define WM_APP_WHEEL   (WM_APP + 3)
+#define WM_APP_SHOW    (WM_APP + 4)
 
 enum { HK_UP = 1, HK_DOWN, HK_RESET };
-enum { ID_TIMER_TOP = 1 };
-enum { CMD_EXIT = 100, CMD_SHOW, CMD_LEVEL_BASE = 200 };
+enum { TM_TOP = 1, TM_FADE, TM_IDLE };
+enum { CMD_EXIT = 100, CMD_AUTORUN, CMD_SHOW, CMD_LEVEL_BASE = 200 };
+enum { WHEEL_FROM_PANEL = 0, WHEEL_FROM_TRAY = 1 };
+enum { POS_TRAY, POS_HUD };
 
 /* ---------------------------------------------------------------- 전역 상태 */
 static HINSTANCE g_inst;
@@ -40,30 +49,38 @@ static HWND g_main, g_overlay;
 static HHOOK g_mouse_hook;
 static UINT g_taskbar_created;
 static NOTIFYICONDATAW g_nid;
-static HICON g_icon_big, g_icon_small;
 
 static double g_level = 100.0;   /* 0..100 */
 static double g_split = 50.0;    /* 하드웨어 제어 불가 시 100 */
 static int g_hw_ready = 0;
 static int g_hw_original = -1;
 static int g_touched = 0;
-static int g_hover = 0;
 static int g_overlay_trans = -1; /* 0..255, 255 = 숨김 */
-static int g_dragging_bar = 0;
+static int g_dragging = 0;
 static int g_wheel_accum = 0;
 static UINT g_dpi = 96;
 
-#define S(v) MulDiv((v), (int)g_dpi, 96)
+/* 패널 표시 상태 */
+static int g_shown = 0;          /* 보이는 중(또는 나타나는 중) */
+static int g_alpha = 0;          /* 페이드 0..255 */
+static int g_activated = 0;      /* 클릭으로 열려 포커스를 가진 경우: 바깥 클릭 시 닫힘 */
+static DWORD g_last_activity;
+static DWORD g_hide_delay = 1600;
+static int g_show_hint = 0;      /* 첫 실행 안내 문구 */
+static int g_dark = 1;           /* 패널 다크 모드 */
+static int g_taskbar_dark = 1;
+static DWORD g_deact_tick;       /* 바깥 클릭으로 닫힌 시각 (트레이 재클릭 토글 처리용) */
 
-static const COLORREF C_BG = RGB(0x1b, 0x1d, 0x22), C_FG = RGB(0xf2, 0xf3, 0xf5),
-                      C_SUB = RGB(0x8a, 0x8f, 0x99), C_HINT = RGB(0x5d, 0x62, 0x6c),
-                      C_ACCENT = RGB(0xff, 0xcc, 0x4d), C_TRACK = RGB(0x33, 0x36, 0x3d),
-                      C_BORDER = RGB(0x2c, 0x2f, 0x36), C_TICK = RGB(0x55, 0x5a, 0x63);
+#define S(v) ((int)lround((v) * (double)g_dpi / 96.0))
 
-/* 디자인 기준(96 DPI) 크기 */
-#define WIN_W 280
-#define WIN_H 158
-#define PAD 16
+/* 패널 디자인 기준(96 DPI) */
+#define PW 300      /* 패널 너비 */
+#define PH 112      /* 패널 높이 */
+#define PM 28       /* 그림자 여백 */
+#define PR 18       /* 모서리 반경 */
+#define TRACK_X 16
+#define TRACK_Y 44
+#define TRACK_H 28
 
 /* ---------------------------------------------------------------- 밝기 곡선 */
 /* 0..split 구간 -> 오버레이 투과량(0~255). 어두운 쪽을 촘촘하게 (감마 2.2). */
@@ -286,10 +303,11 @@ static void overlay_fit(void)
 
 static void raise_windows(void)
 {
-    /* 작업표시줄 등 다른 최상위 창이 덮어도 오버레이 -> 조절 창 순서로 다시 맨 위로 */
+    /* 작업표시줄 등 다른 최상위 창이 덮어도 오버레이 -> 패널 순서로 다시 맨 위로 */
     if (g_overlay_trans < 255)
         SetWindowPos(g_overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    SetWindowPos(g_main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    if (g_shown)
+        SetWindowPos(g_main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 static void overlay_set(int trans)
@@ -316,15 +334,188 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l)
     return DefWindowProcW(h, m, w, l);
 }
 
-/* ---------------------------------------------------------------- 조절 창 */
-static void update_window_alpha(void)
+/* ---------------------------------------------------------------- 렌더링 (안티에일리어싱 + 픽셀 단위 투명도) */
+/* 32bpp premultiplied BGRA 캔버스에 SDF(부호 거리)로 도형을 그린다. */
+typedef struct { int w, h; UINT32 *px; HDC dc; HBITMAP bmp; HGDIOBJ old; } Canvas;
+typedef struct { double r, g, b, a; } Rgba; /* 0..1, straight alpha */
+
+static Canvas g_cv, g_mask;
+
+static void canvas_free(Canvas *c)
 {
-    double a = 1.0;
-    if (!g_hover) {
-        double r = g_level / (g_split < 1 ? 1 : g_split);
-        a = 0.35 + 0.65 * (r > 1 ? 1 : r);
+    if (c->dc) {
+        SelectObject(c->dc, c->old);
+        DeleteObject(c->bmp);
+        DeleteDC(c->dc);
     }
-    SetLayeredWindowAttributes(g_main, 0, (BYTE)lround(a * 255), LWA_ALPHA);
+    ZeroMemory(c, sizeof(*c));
+}
+
+static void canvas_init(Canvas *c, int w, int h)
+{
+    if (c->dc && c->w == w && c->h == h) return;
+    canvas_free(c);
+    BITMAPINFO bi;
+    ZeroMemory(&bi, sizeof(bi));
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -h;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void *bits = NULL;
+    c->dc = CreateCompatibleDC(NULL);
+    c->bmp = CreateDIBSection(c->dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    c->old = SelectObject(c->dc, c->bmp);
+    c->px = (UINT32 *)bits;
+    c->w = w;
+    c->h = h;
+}
+
+static inline void blend_px(UINT32 *d, Rgba c, double cov)
+{
+    double a = c.a * cov;
+    if (a <= 0.0) return;
+    if (a > 1.0) a = 1.0;
+    UINT32 v = *d;
+    double da = ((v >> 24) & 255) / 255.0, dr = ((v >> 16) & 255) / 255.0,
+           dg = ((v >> 8) & 255) / 255.0, db = (v & 255) / 255.0;
+    double k = 1.0 - a;
+    double oa = a + da * k, or_ = c.r * a + dr * k, og = c.g * a + dg * k, ob = c.b * a + db * k;
+    *d = ((UINT32)lround(oa * 255) << 24) | ((UINT32)lround(or_ * 255) << 16) |
+         ((UINT32)lround(og * 255) << 8) | (UINT32)lround(ob * 255);
+}
+
+static double sdf_rrect(double px, double py, double x0, double y0, double x1, double y1, double r)
+{
+    double cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    double hx = (x1 - x0) / 2 - r, hy = (y1 - y0) / 2 - r;
+    double qx = fabs(px - cx) - hx, qy = fabs(py - cy) - hy;
+    double ox = qx > 0 ? qx : 0, oy = qy > 0 ? qy : 0;
+    double inside = (qx > qy ? qx : qy);
+    if (inside > 0) inside = 0;
+    return sqrt(ox * ox + oy * oy) + inside - r;
+}
+
+static double sdf_capsule(double px, double py, double ax, double ay, double bx, double by, double r)
+{
+    double pax = px - ax, pay = py - ay, bax = bx - ax, bay = by - ay;
+    double h = (pax * bax + pay * bay) / (bax * bax + bay * bay);
+    if (h < 0) h = 0;
+    if (h > 1) h = 1;
+    double dx = pax - bax * h, dy = pay - bay * h;
+    return sqrt(dx * dx + dy * dy) - r;
+}
+
+static inline double cov_of(double d) { d = 0.5 - d; return d < 0 ? 0 : (d > 1 ? 1 : d); }
+
+static void fill_rrect(Canvas *c, double x0, double y0, double x1, double y1, double r, Rgba col)
+{
+    int ix0 = (int)floor(x0) - 1, iy0 = (int)floor(y0) - 1, ix1 = (int)ceil(x1) + 1, iy1 = (int)ceil(y1) + 1;
+    if (ix0 < 0) ix0 = 0;
+    if (iy0 < 0) iy0 = 0;
+    if (ix1 > c->w) ix1 = c->w;
+    if (iy1 > c->h) iy1 = c->h;
+    for (int y = iy0; y < iy1; y++)
+        for (int x = ix0; x < ix1; x++) {
+            double cv = cov_of(sdf_rrect(x + 0.5, y + 0.5, x0, y0, x1, y1, r));
+            if (cv > 0) blend_px(&c->px[y * c->w + x], col, cv);
+        }
+}
+
+/* 둥근 사각형 테두리 (안쪽 1px 링) */
+static void stroke_rrect(Canvas *c, double x0, double y0, double x1, double y1, double r, double wd, Rgba col)
+{
+    for (int y = (int)y0; y < (int)ceil(y1) && y < c->h; y++)
+        for (int x = (int)x0; x < (int)ceil(x1) && x < c->w; x++) {
+            double d = sdf_rrect(x + 0.5, y + 0.5, x0, y0, x1, y1, r);
+            double cv = cov_of(d) * cov_of(-d - wd);
+            if (cv > 0) blend_px(&c->px[y * c->w + x], col, cv);
+        }
+}
+
+/* 부드러운 그림자 */
+static void shadow_rrect(Canvas *c, double x0, double y0, double x1, double y1, double r, double blur, double alpha)
+{
+    for (int y = 0; y < c->h; y++)
+        for (int x = 0; x < c->w; x++) {
+            double d = sdf_rrect(x + 0.5, y + 0.5, x0, y0, x1, y1, r);
+            double t = d <= 0 ? 1.0 : exp(-(d * d) / (2 * blur * blur / 4));
+            if (t > 0.002) {
+                Rgba k = {0, 0, 0, alpha};
+                blend_px(&c->px[y * c->w + x], k, t);
+            }
+        }
+}
+
+/* SF Symbols 'sun.max.fill' 스타일 해 아이콘 */
+static void draw_sun(Canvas *c, double cx, double cy, double size, Rgba col)
+{
+    double core = size * 0.20, r0 = size * 0.33, r1 = size * 0.45, rw = size * 0.045;
+    int x0 = (int)(cx - size / 2) - 1, x1 = (int)(cx + size / 2) + 2;
+    int y0 = (int)(cy - size / 2) - 1, y1 = (int)(cy + size / 2) + 2;
+    for (int y = y0; y < y1; y++) {
+        if (y < 0 || y >= c->h) continue;
+        for (int x = x0; x < x1; x++) {
+            if (x < 0 || x >= c->w) continue;
+            double px = x + 0.5, py = y + 0.5;
+            double d = sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy)) - core;
+            for (int i = 0; i < 8; i++) {
+                double a = i * 3.14159265358979 / 4;
+                double dd = sdf_capsule(px, py, cx + r0 * cos(a), cy + r0 * sin(a),
+                                        cx + r1 * cos(a), cy + r1 * sin(a), rw);
+                if (dd < d) d = dd;
+            }
+            double cv = cov_of(d);
+            if (cv > 0) blend_px(&c->px[y * c->w + x], col, cv);
+        }
+    }
+}
+
+/* 텍스트: GDI로 흑백 마스크에 그린 뒤 커버리지로 색을 합성 */
+static HFONT make_font(const wchar_t *face, int px, int weight)
+{
+    return CreateFontW(-S(px), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, OUT_TT_PRECIS,
+                       CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, face);
+}
+
+static void draw_text(Canvas *c, const wchar_t *s, RECT rc, HFONT f, UINT fmt, Rgba col)
+{
+    canvas_init(&g_mask, c->w, c->h);
+    RECT clr = rc;
+    if (clr.left < 0) clr.left = 0;
+    if (clr.top < 0) clr.top = 0;
+    if (clr.right > c->w) clr.right = c->w;
+    if (clr.bottom > c->h) clr.bottom = c->h;
+    for (int y = clr.top; y < clr.bottom; y++)
+        for (int x = clr.left; x < clr.right; x++) g_mask.px[y * c->w + x] = 0;
+    HGDIOBJ of = SelectObject(g_mask.dc, f);
+    SetBkMode(g_mask.dc, TRANSPARENT);
+    SetTextColor(g_mask.dc, RGB(255, 255, 255));
+    DrawTextW(g_mask.dc, s, -1, &rc, fmt | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(g_mask.dc, of);
+    GdiFlush();
+    for (int y = clr.top; y < clr.bottom; y++)
+        for (int x = clr.left; x < clr.right; x++) {
+            int g = (g_mask.px[y * c->w + x] >> 8) & 255;
+            if (g) blend_px(&c->px[y * c->w + x], col, g / 255.0);
+        }
+}
+
+/* ---------------------------------------------------------------- 패널 */
+static RECT panel_rect_client(void) /* 창 안에서 패널(그림자 제외) 위치 */
+{
+    RECT r = {S(PM), S(PM), S(PM) + S(PW), S(PM) + S(PH)};
+    return r;
+}
+
+static void track_geom(double *x0, double *y0, double *x1, double *y1)
+{
+    RECT p = panel_rect_client();
+    *x0 = p.left + S(TRACK_X);
+    *x1 = p.right - S(TRACK_X);
+    *y0 = p.top + S(TRACK_Y);
+    *y1 = *y0 + S(TRACK_H);
 }
 
 static void format_level(wchar_t *buf, size_t n)
@@ -335,147 +526,301 @@ static void format_level(wchar_t *buf, size_t n)
         swprintf(buf, n, L"%d%%", (int)lround(g_level));
 }
 
+static void mode_text(wchar_t *buf, size_t n)
+{
+    int hw = hw_percent();
+    if (g_show_hint)
+        wcsncpy(buf, L"아이콘 클릭 또는 아이콘 위에서 휠로 조절", n);
+    else if (!g_hw_ready)
+        wcsncpy(buf, L"모니터 확인 중…", n);
+    else if (g_level <= 0)
+        wcsncpy(buf, L"화면 꺼짐 · Ctrl+Alt+Home 으로 복구", n);
+    else if (g_level < g_split)
+        wcsncpy(buf, g_split < 100 ? L"모니터 최저 밝기 + 화면 어둡게" : L"화면 어둡게", n);
+    else if (hw >= 0)
+        swprintf(buf, n, L"모니터 밝기 %d%%", hw);
+    else
+        wcsncpy(buf, L"원래 밝기", n);
+    buf[n - 1] = 0;
+}
+
+static void render_panel(void)
+{
+    int W = S(PW + 2 * PM), H = S(PH + 2 * PM);
+    canvas_init(&g_cv, W, H);
+    ZeroMemory(g_cv.px, (size_t)W * H * 4);
+
+    /* 색상: macOS 다크/라이트 */
+    Rgba bg, border, primary, secondary, track, fill, glyph;
+    if (g_dark) {
+        bg = (Rgba){0.141, 0.141, 0.149, 0.97};
+        border = (Rgba){1, 1, 1, 0.13};
+        primary = (Rgba){0.961, 0.961, 0.969, 1};
+        secondary = (Rgba){0.922, 0.922, 0.961, 0.55};
+        track = (Rgba){1, 1, 1, 0.11};
+        fill = (Rgba){1, 1, 1, 0.96};
+        glyph = (Rgba){0.24, 0.24, 0.26, 0.75};
+    } else {
+        bg = (Rgba){0.965, 0.965, 0.973, 0.97};
+        border = (Rgba){0, 0, 0, 0.10};
+        primary = (Rgba){0.114, 0.114, 0.122, 1};
+        secondary = (Rgba){0.235, 0.235, 0.263, 0.6};
+        track = (Rgba){0, 0, 0, 0.09};
+        fill = (Rgba){1, 1, 1, 1};
+        glyph = (Rgba){0.24, 0.24, 0.26, 0.7};
+    }
+
+    RECT p = panel_rect_client();
+    double r = S(PR);
+    shadow_rrect(&g_cv, p.left, p.top + S(6), p.right, p.bottom + S(6), r, S(22), g_dark ? 0.45 : 0.22);
+    fill_rrect(&g_cv, p.left, p.top, p.right, p.bottom, r, bg);
+    stroke_rrect(&g_cv, p.left, p.top, p.right, p.bottom, r, 1.0, border);
+
+    HFONT f_title = make_font(L"Malgun Gothic", 13, FW_BOLD);
+    HFONT f_value = make_font(L"Segoe UI Semibold", 13, FW_SEMIBOLD);
+    HFONT f_caption = make_font(L"Malgun Gothic", 12, FW_NORMAL);
+
+    RECT rt = {p.left + S(16), p.top + S(12), p.right - S(60), p.top + S(36)};
+    draw_text(&g_cv, L"디스플레이", rt, f_title, DT_LEFT | DT_VCENTER, primary);
+    wchar_t lv[16];
+    format_level(lv, 16);
+    RECT rv = {p.right - S(80), p.top + S(12), p.right - S(16), p.top + S(36)};
+    draw_text(&g_cv, lv, rv, f_value, DT_RIGHT | DT_VCENTER, secondary);
+
+    /* 캡슐 슬라이더: 채움은 최소 트랙 높이(원)부터 시작 — macOS 제어 센터와 동일 */
+    double tx0, ty0, tx1, ty1;
+    track_geom(&tx0, &ty0, &tx1, &ty1);
+    double th = ty1 - ty0, tr = th / 2;
+    fill_rrect(&g_cv, tx0, ty0, tx1, ty1, tr, track);
+    double fw = th + (tx1 - tx0 - th) * g_level / 100.0;
+    if (!g_dark) shadow_rrect(&g_cv, tx0, ty0 + 1, tx0 + fw, ty1 + 1, tr, S(3), 0.10);
+    fill_rrect(&g_cv, tx0, ty0, tx0 + fw, ty1, tr, fill);
+    draw_sun(&g_cv, tx0 + tr, ty0 + tr, th * 0.62, glyph);
+
+    wchar_t mode[96];
+    mode_text(mode, 96);
+    RECT rm = {p.left + S(16), p.top + S(80), p.right - S(16), p.top + S(100)};
+    draw_text(&g_cv, mode, rm, f_caption, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, secondary);
+
+    DeleteObject(f_title);
+    DeleteObject(f_value);
+    DeleteObject(f_caption);
+}
+
+static void present(void)
+{
+    RECT wr;
+    GetWindowRect(g_main, &wr);
+    POINT dst = {wr.left, wr.top}, src = {0, 0};
+    SIZE sz = {g_cv.w, g_cv.h};
+    BLENDFUNCTION bf = {AC_SRC_OVER, 0, (BYTE)g_alpha, AC_SRC_ALPHA};
+    UpdateLayeredWindow(g_main, NULL, &dst, &sz, g_cv.dc, &src, 0, &bf, ULW_ALPHA);
+}
+
+static void redraw(void)
+{
+    if (!g_shown && g_alpha == 0) return;
+    render_panel();
+    present();
+}
+
+static void read_theme(void)
+{
+    DWORD v = 0, sz = sizeof(v);
+    g_dark = 1;
+    g_taskbar_dark = 1;
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                     L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &v, &sz) == ERROR_SUCCESS)
+        g_dark = v == 0;
+    sz = sizeof(v);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                     L"SystemUsesLightTheme", RRF_RT_REG_DWORD, NULL, &v, &sz) == ERROR_SUCCESS)
+        g_taskbar_dark = v == 0;
+}
+
+static void place_panel(int where)
+{
+    int W = S(PW + 2 * PM), H = S(PH + 2 * PM);
+    POINT pt;
+    GetCursorPos(&pt);
+    HMONITOR mon = where == POS_HUD ? MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY)
+                                    : MonitorFromWindow(FindWindowW(L"Shell_TrayWnd", NULL), MONITOR_DEFAULTTOPRIMARY);
+    MONITORINFO mi;
+    ZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    GetMonitorInfoW(mon, &mi);
+    RECT wa = mi.rcWork;
+    int x, y;
+    if (where == POS_HUD) {
+        x = (wa.left + wa.right) / 2 - W / 2;
+        y = wa.bottom - S(72) - S(PH) - S(PM);
+    } else {
+        /* 트레이 근처 (작업표시줄 위치에 맞춤) */
+        RECT mr = mi.rcMonitor;
+        x = wa.right - S(12) - S(PW) - S(PM);
+        y = wa.bottom - S(12) - S(PH) - S(PM);
+        if (wa.top > mr.top) y = wa.top + S(12) - S(PM);          /* 작업표시줄이 위쪽 */
+        if (wa.left > mr.left) x = wa.left + S(12) - S(PM);       /* 작업표시줄이 왼쪽 */
+    }
+    SetWindowPos(g_main, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE);
+}
+
+static void show_panel(int where, int activate, DWORD hide_delay)
+{
+    g_last_activity = GetTickCount();
+    g_hide_delay = hide_delay;
+    if (!g_shown || g_alpha == 0) {
+        place_panel(where);
+        g_alpha = 0;
+    }
+    g_shown = 1;
+    render_panel();
+    present();
+    ShowWindow(g_main, activate ? SW_SHOW : SW_SHOWNOACTIVATE);
+    if (activate) {
+        SetForegroundWindow(g_main);
+        g_activated = 1;
+    }
+    raise_windows();
+    SetTimer(g_main, TM_FADE, 15, NULL);
+    SetTimer(g_main, TM_IDLE, 150, NULL);
+}
+
+static void hide_panel(void)
+{
+    if (!g_shown) return;
+    g_shown = 0;
+    g_activated = 0;
+    g_dragging = 0;
+    ReleaseCapture();
+    SetTimer(g_main, TM_FADE, 15, NULL);
+}
+
+static void fade_step(void)
+{
+    int target = g_shown ? 255 : 0;
+    int speed = g_shown ? 48 : 28;
+    if (g_alpha < target) g_alpha = g_alpha + speed > 255 ? 255 : g_alpha + speed;
+    else if (g_alpha > target) g_alpha = g_alpha - speed < 0 ? 0 : g_alpha - speed;
+    present();
+    if (g_alpha == target) {
+        KillTimer(g_main, TM_FADE);
+        if (!g_shown) {
+            ShowWindow(g_main, SW_HIDE);
+            KillTimer(g_main, TM_IDLE);
+            g_show_hint = 0;
+        }
+    }
+}
+
+static int cursor_in_panel(void)
+{
+    if (!IsWindowVisible(g_main)) return 0;
+    POINT pt;
+    GetCursorPos(&pt);
+    RECT wr;
+    GetWindowRect(g_main, &wr);
+    RECT p = panel_rect_client();
+    OffsetRect(&p, wr.left, wr.top);
+    return PtInRect(&p, pt);
+}
+
+/* ---------------------------------------------------------------- 트레이 */
+static HICON tray_icon(void)
+{
+    HICON ic = NULL;
+    LoadIconMetric(g_inst, MAKEINTRESOURCEW(g_taskbar_dark ? IDI_TRAY_WHITE : IDI_TRAY_BLACK), LIM_SMALL, &ic);
+    return ic;
+}
+
+static void update_tray(int add)
+{
+    if (add) {
+        ZeroMemory(&g_nid, sizeof(g_nid));
+        g_nid.cbSize = sizeof(g_nid);
+        g_nid.hWnd = g_main;
+        g_nid.uID = 1;
+        g_nid.uCallbackMessage = WM_APP_TRAY;
+    }
+    if (g_nid.hIcon) DestroyIcon(g_nid.hIcon);
+    g_nid.hIcon = tray_icon();
+    wchar_t lv[16];
+    format_level(lv, 16);
+    swprintf(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"밝기 %ls · 아이콘 위에서 휠로 조절", lv);
+    g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    Shell_NotifyIconW(add ? NIM_ADD : NIM_MODIFY, &g_nid);
+}
+
 static void update_tray_tip(void)
 {
     wchar_t lv[16];
     format_level(lv, 16);
-    swprintf(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"밝기 %ls — 휠/Ctrl+Alt+PgUp·PgDn", lv);
+    swprintf(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"밝기 %ls · 아이콘 위에서 휠로 조절", lv);
     g_nid.uFlags = NIF_TIP;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
 }
 
+static int cursor_on_tray(POINT pt)
+{
+    NOTIFYICONIDENTIFIER id;
+    ZeroMemory(&id, sizeof(id));
+    id.cbSize = sizeof(id);
+    id.hWnd = g_main;
+    id.uID = 1;
+    RECT r;
+    if (FAILED(Shell_NotifyIconGetRect(&id, &r))) return 0;
+    return PtInRect(&r, pt);
+}
+
+/* ---------------------------------------------------------------- 자동 실행 */
+static int autorun_enabled(void)
+{
+    return RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, RUN_VALUE, RRF_RT_REG_SZ, NULL, NULL, NULL) == ERROR_SUCCESS;
+}
+
+static void autorun_set(int on)
+{
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY, 0, KEY_SET_VALUE, &k) != ERROR_SUCCESS) return;
+    if (on) {
+        wchar_t exe[MAX_PATH], cmd[MAX_PATH + 32];
+        GetModuleFileNameW(NULL, exe, MAX_PATH);
+        swprintf(cmd, ARRAYSIZE(cmd), L"\"%ls\" --background", exe);
+        RegSetValueExW(k, RUN_VALUE, 0, REG_SZ, (const BYTE *)cmd, (DWORD)((wcslen(cmd) + 1) * sizeof(wchar_t)));
+    } else {
+        RegDeleteValueW(k, RUN_VALUE);
+    }
+    RegCloseKey(k);
+}
+
+/* ---------------------------------------------------------------- 밝기 적용 */
 static void apply(void)
 {
     overlay_set(overlay_transmission(g_level, g_split));
     int hw = hw_percent();
     if (hw >= 0 && g_hw_ready) hw_request(hw);
-    update_window_alpha();
     update_tray_tip();
-    InvalidateRect(g_main, NULL, FALSE);
+    redraw();
 }
 
 static void set_level(double v)
 {
     g_touched = 1;
+    g_show_hint = 0;
     v = round(v * 2.0) / 2.0;
     g_level = v < 0 ? 0 : (v > 100 ? 100 : v);
+    g_last_activity = GetTickCount();
     apply();
 }
 
 static void step(double d) { set_level(g_level + d); }
 
-/* 영역 계산 (클라이언트 좌표, 실제 픽셀) */
-static RECT rc_close(void) { RECT r = {S(WIN_W - 36), S(4), S(WIN_W - 6), S(32)}; return r; }
-static RECT rc_bar_hit(void) { RECT r = {S(PAD - 6), S(84), S(WIN_W - PAD + 6), S(108)}; return r; }
-static int bar_x0(void) { return S(PAD); }
-static int bar_x1(void) { return S(WIN_W - PAD); }
-
-static HFONT make_font(int px, int weight)
+static void track_set_from_x(int x)
 {
-    return CreateFontW(-S(px), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                       CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Malgun Gothic");
-}
-
-static void fill(HDC dc, int l, int t, int r, int b, COLORREF c)
-{
-    RECT rc = {l, t, r, b};
-    HBRUSH br = CreateSolidBrush(c);
-    FillRect(dc, &rc, br);
-    DeleteObject(br);
-}
-
-static void text(HDC dc, const wchar_t *s, RECT rc, HFONT f, COLORREF c, UINT fmt)
-{
-    SelectObject(dc, f);
-    SetTextColor(dc, c);
-    DrawTextW(dc, s, -1, &rc, fmt | DT_SINGLELINE | DT_NOPREFIX);
-}
-
-static void paint(HWND h)
-{
-    PAINTSTRUCT ps;
-    HDC wdc = BeginPaint(h, &ps);
-    RECT cr;
-    GetClientRect(h, &cr);
-    HDC dc = CreateCompatibleDC(wdc);
-    HBITMAP bmp = CreateCompatibleBitmap(wdc, cr.right, cr.bottom);
-    HGDIOBJ oldbmp = SelectObject(dc, bmp);
-    SetBkMode(dc, TRANSPARENT);
-
-    fill(dc, 0, 0, cr.right, cr.bottom, C_BORDER);
-    fill(dc, 1, 1, cr.right - 1, cr.bottom - 1, C_BG);
-
-    HFONT f_title = make_font(13, FW_NORMAL), f_big = make_font(38, FW_BOLD),
-          f_mode = make_font(12, FW_NORMAL), f_hint = make_font(11, FW_NORMAL);
-    HGDIOBJ oldf = SelectObject(dc, f_title);
-
-    /* 기호는 글꼴에 따라 깨질 수 있어 직접 그림: 해 아이콘 + 닫기 X */
-    HPEN pen = CreatePen(PS_SOLID, S(2) > 1 ? S(2) : 1, C_SUB);
-    HGDIOBJ oldpen = SelectObject(dc, pen);
-    HGDIOBJ oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    int cx = S(PAD + 7), cy = S(19);
-    Ellipse(dc, cx - S(3), cy - S(3), cx + S(4), cy + S(4));
-    for (int i = 0; i < 8; i++) {
-        double a = i * 3.14159265 / 4;
-        MoveToEx(dc, cx + (int)lround(S(6) * cos(a)), cy + (int)lround(S(6) * sin(a)), NULL);
-        LineTo(dc, cx + (int)lround(S(8) * cos(a)), cy + (int)lround(S(8) * sin(a)));
-    }
-    RECT rx = rc_close();
-    int xm = (rx.left + rx.right) / 2, ym = (rx.top + rx.bottom) / 2, xs = S(5);
-    MoveToEx(dc, xm - xs, ym - xs, NULL);
-    LineTo(dc, xm + xs + 1, ym + xs + 1);
-    MoveToEx(dc, xm + xs, ym - xs, NULL);
-    LineTo(dc, xm - xs - 1, ym + xs + 1);
-    SelectObject(dc, oldbr);
-    SelectObject(dc, oldpen);
-    DeleteObject(pen);
-    RECT r = {S(PAD + 20), S(8), S(WIN_W - 40), S(30)};
-    text(dc, L"밝기", r, f_title, C_SUB, DT_LEFT | DT_VCENTER);
-
-    wchar_t lv[16];
-    format_level(lv, 16);
-    RECT rv = {0, S(28), cr.right, S(84)};
-    text(dc, lv, rv, f_big, C_FG, DT_CENTER | DT_VCENTER);
-
-    int x0 = bar_x0(), x1 = bar_x1(), by0 = S(92), by1 = S(100);
-    fill(dc, x0, by0, x1, by1, C_TRACK);
-    fill(dc, x0, by0, x0 + (int)lround((x1 - x0) * g_level / 100.0), by1, C_ACCENT);
-    if (g_split < 100) {
-        int sx = x0 + (int)lround((x1 - x0) * g_split / 100.0);
-        fill(dc, sx, by0 - S(4), sx + (S(1) > 1 ? S(1) : 1), by1 + S(4), C_TICK);
-    }
-
-    wchar_t mode[96];
-    int hw = hw_percent();
-    if (g_level <= 0)
-        wcscpy(mode, L"완전 소등 (화면 꺼짐 상태)");
-    else if (g_level < g_split)
-        wcscpy(mode, g_split < 100 ? L"모니터 최저 밝기 + 화면 어둡게" : L"화면 어둡게 (검은 막)");
-    else if (hw >= 0)
-        swprintf(mode, 96, L"모니터 밝기 %d%%", hw);
-    else
-        wcscpy(mode, L"원래 밝기 (모니터 자체 조절 미지원)");
-    if (!g_hw_ready) wcscat(mode, L" · 모니터 확인 중…");
-    RECT rm = {0, S(108), cr.right, S(128)};
-    text(dc, mode, rm, f_mode, C_SUB, DT_CENTER | DT_VCENTER);
-    RECT rh = {0, S(128), cr.right, S(148)};
-    text(dc, L"휠: 조절 · Shift 미세 · Ctrl 크게 · 우클릭 메뉴", rh, f_hint, C_HINT, DT_CENTER | DT_VCENTER);
-
-    BitBlt(wdc, 0, 0, cr.right, cr.bottom, dc, 0, 0, SRCCOPY);
-    SelectObject(dc, oldf);
-    DeleteObject(f_title);
-    DeleteObject(f_big);
-    DeleteObject(f_mode);
-    DeleteObject(f_hint);
-    SelectObject(dc, oldbmp);
-    DeleteObject(bmp);
-    DeleteDC(dc);
-    EndPaint(h, &ps);
-}
-
-static void bar_set_from_x(int x)
-{
-    double t = (double)(x - bar_x0()) / (bar_x1() - bar_x0());
+    double tx0, ty0, tx1, ty1;
+    track_geom(&tx0, &ty0, &tx1, &ty1);
+    double th = ty1 - ty0;
+    double t = (x - tx0 - th / 2) / (tx1 - tx0 - th);
     if (t < 0) t = 0;
     if (t > 1) t = 1;
     set_level(round(t * 100.0));
@@ -491,37 +836,15 @@ static void show_menu(HWND h)
         AppendMenuW(m, MF_STRING, CMD_LEVEL_BASE + levels[i], s);
     }
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(m, MF_STRING, CMD_SHOW, IsWindowVisible(g_main) ? L"창 숨기기" : L"창 보이기");
+    AppendMenuW(m, MF_STRING | (autorun_enabled() ? MF_CHECKED : 0), CMD_AUTORUN, L"Windows 시작 시 자동 실행");
+    AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, CMD_EXIT, L"종료");
     POINT pt;
     GetCursorPos(&pt);
     SetForegroundWindow(h);
-    TrackPopupMenu(m, TPM_RIGHTBUTTON, pt.x, pt.y, 0, h, NULL);
+    TrackPopupMenu(m, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0, h, NULL);
     PostMessageW(h, WM_NULL, 0, 0);
     DestroyMenu(m);
-}
-
-static void toggle_visible(void)
-{
-    if (IsWindowVisible(g_main)) {
-        ShowWindow(g_main, SW_HIDE);
-    } else {
-        ShowWindow(g_main, SW_SHOWNOACTIVATE);
-        raise_windows();
-    }
-}
-
-static void add_tray(void)
-{
-    ZeroMemory(&g_nid, sizeof(g_nid));
-    g_nid.cbSize = sizeof(g_nid);
-    g_nid.hWnd = g_main;
-    g_nid.uID = 1;
-    g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-    g_nid.uCallbackMessage = WM_APP_TRAY;
-    g_nid.hIcon = g_icon_small;
-    wcscpy(g_nid.szTip, APP_NAME);
-    Shell_NotifyIconW(NIM_ADD, &g_nid);
 }
 
 static void do_exit(void)
@@ -536,30 +859,32 @@ static void do_exit(void)
     DestroyWindow(g_main);
 }
 
-/* 다른 창에 포커스가 있어도, 커서가 조절 창 위에 있으면 휠을 받도록 저수준 훅 사용 */
+/* 저수준 마우스 훅: 패널 위 또는 트레이 아이콘 위의 휠을 가로챔 (포커스와 무관하게 동작) */
 static LRESULT CALLBACK mouse_hook(int code, WPARAM w, LPARAM l)
 {
-    if (code == HC_ACTION && w == WM_MOUSEWHEEL && IsWindowVisible(g_main)) {
+    if (code == HC_ACTION && w == WM_MOUSEWHEEL) {
         MSLLHOOKSTRUCT *ms = (MSLLHOOKSTRUCT *)l;
-        HWND under = WindowFromPoint(ms->pt);
-        if (under && GetAncestor(under, GA_ROOT) == g_main) {
+        int src = -1;
+        if (IsWindowVisible(g_main) && g_shown) {
+            HWND under = WindowFromPoint(ms->pt);
+            if (under && GetAncestor(under, GA_ROOT) == g_main) src = WHEEL_FROM_PANEL;
+        }
+        if (src < 0 && cursor_on_tray(ms->pt)) src = WHEEL_FROM_TRAY;
+        if (src >= 0) {
             short delta = (short)HIWORD(ms->mouseData);
             int mods = (GetAsyncKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetAsyncKeyState(VK_CONTROL) < 0 ? 2 : 0);
-            PostMessageW(g_main, WM_APP_WHEEL, (WPARAM)(LONG_PTR)delta, mods);
+            PostMessageW(g_main, WM_APP_WHEEL, (WPARAM)(LONG_PTR)delta, (LPARAM)(mods | (src << 4)));
             return 1;
         }
     }
     return CallNextHookEx(g_mouse_hook, code, w, l);
 }
 
-static void on_wheel(int delta, int mods)
+static void on_wheel(int delta, int mods, int src)
 {
+    if (src == WHEEL_FROM_TRAY && !g_shown) show_panel(POS_TRAY, 0, 1600);
     g_wheel_accum += delta;
-    int notches = g_wheel_accum / WHEEL_DELTA;
-    if (notches == 0) {
-        /* 고해상도 휠: 남은 값도 비율로 반영 */
-        if (abs(g_wheel_accum) < WHEEL_DELTA / 4) return;
-    }
+    if (abs(g_wheel_accum) < WHEEL_DELTA / 4) return; /* 고해상도 휠 대응 */
     double n = (double)g_wheel_accum / WHEEL_DELTA;
     g_wheel_accum = 0;
     double mult = (mods & 1) ? 0.5 : ((mods & 2) ? 5.0 : 1.0);
@@ -569,50 +894,36 @@ static void on_wheel(int delta, int mods)
 static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     switch (m) {
-    case WM_PAINT:
-        paint(h);
-        return 0;
-    case WM_ERASEBKGND:
-        return 1;
+    case WM_NCHITTEST:
+        return HTCLIENT;
+    case WM_MOUSEACTIVATE:
+        return g_activated ? MA_ACTIVATE : MA_NOACTIVATE;
     case WM_APP_WHEEL:
-        on_wheel((int)(LONG_PTR)w, (int)l);
+        on_wheel((int)(LONG_PTR)w, (int)(l & 0xF), (int)(l >> 4));
         return 0;
     case WM_MOUSEWHEEL: /* 훅이 없을 때 대비 */
         on_wheel(GET_WHEEL_DELTA_WPARAM(w),
-                 ((GET_KEYSTATE_WPARAM(w) & MK_SHIFT) ? 1 : 0) | ((GET_KEYSTATE_WPARAM(w) & MK_CONTROL) ? 2 : 0));
+                 ((GET_KEYSTATE_WPARAM(w) & MK_SHIFT) ? 1 : 0) | ((GET_KEYSTATE_WPARAM(w) & MK_CONTROL) ? 2 : 0),
+                 WHEEL_FROM_PANEL);
         return 0;
     case WM_LBUTTONDOWN: {
-        POINT pt = {GET_X_LPARAM(l), GET_Y_LPARAM(l)};
-        RECT rc = rc_close(), rb = rc_bar_hit();
-        if (PtInRect(&rc, pt)) {
-            do_exit();
-        } else if (PtInRect(&rb, pt)) {
-            g_dragging_bar = 1;
+        double tx0, ty0, tx1, ty1;
+        track_geom(&tx0, &ty0, &tx1, &ty1);
+        int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
+        if (x >= tx0 - S(4) && x <= tx1 + S(4) && y >= ty0 - S(8) && y <= ty1 + S(8)) {
+            g_dragging = 1;
             SetCapture(h);
-            bar_set_from_x(pt.x);
-        } else {
-            ReleaseCapture();
-            SendMessageW(h, WM_NCLBUTTONDOWN, HTCAPTION, 0); /* 창 끌어서 이동 */
+            track_set_from_x(x);
         }
         return 0;
     }
-    case WM_MOUSEMOVE: {
-        if (!g_hover) {
-            g_hover = 1;
-            TRACKMOUSEEVENT t = {sizeof(t), TME_LEAVE, h, HOVER_DEFAULT};
-            TrackMouseEvent(&t);
-            update_window_alpha();
-        }
-        if (g_dragging_bar) bar_set_from_x(GET_X_LPARAM(l));
-        return 0;
-    }
-    case WM_MOUSELEAVE:
-        g_hover = 0;
-        update_window_alpha();
+    case WM_MOUSEMOVE:
+        g_last_activity = GetTickCount();
+        if (g_dragging) track_set_from_x(GET_X_LPARAM(l));
         return 0;
     case WM_LBUTTONUP:
-        if (g_dragging_bar) {
-            g_dragging_bar = 0;
+        if (g_dragging) {
+            g_dragging = 0;
             ReleaseCapture();
         }
         return 0;
@@ -622,23 +933,43 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_KEYDOWN:
         if (w == VK_UP || w == VK_RIGHT) step(STEP);
         else if (w == VK_DOWN || w == VK_LEFT) step(-STEP);
-        else if (w == VK_ESCAPE) ShowWindow(h, SW_HIDE);
+        else if (w == VK_ESCAPE || w == VK_RETURN) hide_panel();
+        return 0;
+    case WM_ACTIVATE:
+        if (LOWORD(w) == WA_INACTIVE && g_activated) {
+            g_deact_tick = GetTickCount();
+            hide_panel();
+        }
         return 0;
     case WM_HOTKEY:
         if (w == HK_UP) step(STEP);
         else if (w == HK_DOWN) step(-STEP);
         else if (w == HK_RESET) set_level(100);
+        if (!g_shown || !g_activated) show_panel(g_shown ? POS_TRAY : POS_HUD, 0, 1300);
         return 0;
     case WM_COMMAND: {
         int id = LOWORD(w);
         if (id == CMD_EXIT) do_exit();
-        else if (id == CMD_SHOW) toggle_visible();
-        else if (id >= CMD_LEVEL_BASE && id <= CMD_LEVEL_BASE + 100) set_level(id - CMD_LEVEL_BASE);
+        else if (id == CMD_AUTORUN) autorun_set(!autorun_enabled());
+        else if (id == CMD_SHOW) show_panel(POS_TRAY, 1, 2500);
+        else if (id >= CMD_LEVEL_BASE && id <= CMD_LEVEL_BASE + 100) {
+            set_level(id - CMD_LEVEL_BASE);
+            show_panel(POS_TRAY, 0, 1300);
+        }
         return 0;
     }
     case WM_APP_TRAY:
-        if (LOWORD(l) == WM_LBUTTONUP) toggle_visible();
-        else if (LOWORD(l) == WM_RBUTTONUP) show_menu(h);
+        if (LOWORD(l) == WM_LBUTTONUP || LOWORD(l) == NIN_SELECT || LOWORD(l) == NIN_KEYSELECT) {
+            /* 열린 상태에서 아이콘을 다시 누르면 닫힘 (포커스를 잃으며 이미 닫혔으면 다시 열지 않음) */
+            if (g_shown && g_activated) hide_panel();
+            else if (GetTickCount() - g_deact_tick > 400) show_panel(POS_TRAY, 1, 2500);
+        } else if (LOWORD(l) == WM_RBUTTONUP || LOWORD(l) == WM_CONTEXTMENU) {
+            show_menu(h);
+        }
+        return 0;
+    case WM_APP_SHOW:
+        g_show_hint = (int)w;
+        show_panel(POS_TRAY, 0, w ? 4000 : 2500);
         return 0;
     case WM_APP_HWREADY: {
         int initial = (int)w;
@@ -650,30 +981,41 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     }
     case WM_TIMER:
-        if (w == ID_TIMER_TOP) raise_windows();
+        if (w == TM_TOP) {
+            raise_windows();
+        } else if (w == TM_FADE) {
+            fade_step();
+        } else if (w == TM_IDLE) {
+            /* 사용하지 않으면 자동으로 사라짐 (마우스가 패널 위에 있거나 드래그 중이면 유지) */
+            if (g_dragging || cursor_in_panel()) g_last_activity = GetTickCount();
+            else if (g_shown && GetTickCount() - g_last_activity > g_hide_delay) hide_panel();
+        }
+        return 0;
+    case WM_SETTINGCHANGE:
+        if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
+            read_theme();
+            update_tray(0);
+            redraw();
+        }
         return 0;
     case WM_DISPLAYCHANGE:
         overlay_fit();
         return 0;
-    case WM_DPICHANGED: {
+    case WM_DPICHANGED:
         g_dpi = HIWORD(w);
-        RECT *nr = (RECT *)l;
-        SetWindowPos(h, NULL, nr->left, nr->top, S(WIN_W), S(WIN_H), SWP_NOZORDER | SWP_NOACTIVATE);
-        InvalidateRect(h, NULL, FALSE);
+        redraw();
         return 0;
-    }
     case WM_CLOSE:
-        do_exit();
+        hide_panel();
         return 0;
     case WM_DESTROY:
-        KillTimer(h, ID_TIMER_TOP);
+        KillTimer(h, TM_TOP);
         Shell_NotifyIconW(NIM_DELETE, &g_nid);
         PostQuitMessage(0);
         return 0;
     default:
         if (m == g_taskbar_created && m != 0) {
-            add_tray();
-            update_tray_tip();
+            update_tray(1);
             return 0;
         }
     }
@@ -690,11 +1032,11 @@ static void set_dpi_awareness(void)
     SetProcessDPIAware();
 }
 
-static UINT window_dpi(HWND h)
+static UINT system_dpi(void)
 {
-    typedef UINT(WINAPI * Fn)(HWND);
-    Fn f = (Fn)(void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
-    if (f) return f(h);
+    typedef UINT(WINAPI * Fn)(void);
+    Fn f = (Fn)(void *)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem");
+    if (f) return f();
     HDC dc = GetDC(NULL);
     UINT d = (UINT)GetDeviceCaps(dc, LOGPIXELSX);
     ReleaseDC(NULL, dc);
@@ -703,29 +1045,27 @@ static UINT window_dpi(HWND h)
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 {
-    (void)prev; (void)cmd; (void)show;
+    (void)prev; (void)show;
     g_inst = inst;
+    int background = cmd && wcsstr(cmd, L"--background") != NULL;
 
-    /* 중복 실행 방지: 이미 실행 중이면 그 창을 보여주고 종료 */
+    /* 중복 실행 방지: 이미 실행 중이면 그 패널을 띄우고 종료 */
     CreateMutexW(NULL, TRUE, L"Local\\BrightnessControl_SingleInstance");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND other = FindWindowW(L"BrightnessControlMain", NULL);
-        if (other) {
-            ShowWindow(other, SW_SHOWNOACTIVATE);
-            SetWindowPos(other, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        if (other && !background) {
+            AllowSetForegroundWindow(ASFW_ANY);
+            PostMessageW(other, WM_APP_SHOW, 0, 0);
         }
         return 0;
     }
 
     set_dpi_awareness();
+    g_dpi = system_dpi();
+    read_theme();
     InitializeCriticalSection(&g_hw_cs);
     InitializeConditionVariable(&g_hw_cv);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
-
-    g_icon_big = (HICON)LoadImageW(inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                   GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0);
-    g_icon_small = (HICON)LoadImageW(inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                     GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
 
     WNDCLASSEXW wc;
     ZeroMemory(&wc, sizeof(wc));
@@ -739,8 +1079,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     wc.lpfnWndProc = main_proc;
     wc.hbrBackground = NULL;
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.hIcon = g_icon_big;
-    wc.hIconSm = g_icon_small;
+    wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(IDI_APP));
     wc.lpszClassName = L"BrightnessControlMain";
     RegisterClassExW(&wc);
 
@@ -750,27 +1089,20 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
                                 L"BrightnessControlOverlay", L"", WS_POPUP, 0, 0, 1, 1, NULL, NULL, inst, NULL);
     SetLayeredWindowAttributes(g_overlay, 0, 0, LWA_ALPHA);
 
+    /* 패널: 픽셀 단위 투명도(둥근 모서리 + 그림자) */
     g_main = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-                             L"BrightnessControlMain", APP_NAME, WS_POPUP, 0, 0, 10, 10, NULL, NULL, inst, NULL);
-    g_dpi = window_dpi(g_main);
+                             L"BrightnessControlMain", APP_NAME, WS_POPUP, 0, 0,
+                             S(PW + 2 * PM), S(PH + 2 * PM), NULL, NULL, inst, NULL);
 
-    RECT wa;
-    SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
-    SetWindowPos(g_main, HWND_TOPMOST, wa.right - S(WIN_W) - S(24), wa.bottom - S(WIN_H) - S(24),
-                 S(WIN_W), S(WIN_H), SWP_NOACTIVATE);
-    g_dpi = window_dpi(g_main);
-    SetWindowPos(g_main, NULL, 0, 0, S(WIN_W), S(WIN_H), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-
-    add_tray();
+    update_tray(1);
     RegisterHotKey(g_main, HK_UP, MOD_CONTROL | MOD_ALT, VK_PRIOR);
     RegisterHotKey(g_main, HK_DOWN, MOD_CONTROL | MOD_ALT, VK_NEXT);
     RegisterHotKey(g_main, HK_RESET, MOD_CONTROL | MOD_ALT, VK_HOME);
     g_mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_hook, inst, 0);
-    SetTimer(g_main, ID_TIMER_TOP, 1000, NULL);
+    SetTimer(g_main, TM_TOP, 1000, NULL);
 
     apply();
-    ShowWindow(g_main, SW_SHOWNOACTIVATE);
-    UpdateWindow(g_main);
+    if (!background) PostMessageW(g_main, WM_APP_SHOW, 1, 0); /* 첫 실행: 안내와 함께 잠깐 표시 */
 
     g_hw_thread = CreateThread(NULL, 0, hw_thread, NULL, 0, NULL);
 
