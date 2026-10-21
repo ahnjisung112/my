@@ -16,7 +16,6 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <commctrl.h>
 #include <physicalmonitorenumerationapi.h>
 #include <highlevelmonitorconfigurationapi.h>
 #include <objbase.h>
@@ -728,9 +727,10 @@ static int cursor_in_panel(void)
 /* ---------------------------------------------------------------- 트레이 */
 static HICON tray_icon(void)
 {
-    HICON ic = NULL;
-    LoadIconMetric(g_inst, MAKEINTRESOURCEW(g_taskbar_dark ? IDI_TRAY_WHITE : IDI_TRAY_BLACK), LIM_SMALL, &ic);
-    return ic;
+    /* DPI 인식 프로세스이므로 SM_CXSMICON 이 현재 배율에 맞는 크기(16/20/24/32…)를 돌려줌 */
+    int sz = GetSystemMetrics(SM_CXSMICON);
+    return (HICON)LoadImageW(g_inst, MAKEINTRESOURCEW(g_taskbar_dark ? IDI_TRAY_WHITE : IDI_TRAY_BLACK),
+                             IMAGE_ICON, sz, sz, 0);
 }
 
 static void update_tray(int add)
