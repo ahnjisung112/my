@@ -27,10 +27,12 @@
 #include "resource.h"
 
 #define APP_NAME L"밝기조절"
-#define APP_VERSION 3   /* 실행 중인 예전 버전을 교체할 때 비교 */
+#define APP_VERSION 4   /* 실행 중인 예전 버전을 교체할 때 비교 */
 #define STEP 2.0
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE L"BrightnessControl"
+#define SETTINGS_KEY L"Software\\BrightnessControl"
+#define HW_SPLIT 20.0  /* 20~100%: 모니터 백라이트, 0~20%: 검은 막(백라이트 최저보다 더 어둡게) */
 
 #define WM_APP_TRAY    (WM_APP + 1)
 #define WM_APP_HWREADY (WM_APP + 2)
@@ -39,7 +41,7 @@
 
 enum { HK_UP = 1, HK_DOWN, HK_RESET };
 enum { TM_TOP = 1, TM_FADE, TM_IDLE };
-enum { CMD_EXIT = 100, CMD_AUTORUN, CMD_SHOW, CMD_LEVEL_BASE = 200 };
+enum { CMD_EXIT = 100, CMD_AUTORUN, CMD_SHOW, CMD_USE_HW, CMD_RESTORE, CMD_LEVEL_BASE = 200 };
 enum { WHEEL_FROM_PANEL = 0, WHEEL_FROM_TRAY = 1 };
 enum { POS_TRAY, POS_HUD };
 
@@ -51,7 +53,8 @@ static UINT g_taskbar_created;
 static NOTIFYICONDATAW g_nid;
 
 static double g_level = 100.0;   /* 0..100 */
-static double g_split = 50.0;    /* 하드웨어 제어 불가 시 100 */
+static double g_split = HW_SPLIT; /* 모니터 밝기를 쓰지 않으면 100 (전 구간 검은 막) */
+static int g_use_hw = 1;          /* 설정: 모니터 밝기(DDC/WMI) 직접 조절 */
 static int g_hw_ready = 0;
 static int g_hw_original = -1;
 static int g_touched = 0;
@@ -811,6 +814,25 @@ static int cursor_on_tray(POINT pt)
     return PtInRect(&r, pt);
 }
 
+/* ---------------------------------------------------------------- 설정 */
+static int setting_get(const wchar_t *name, int def)
+{
+    DWORD v = 0, sz = sizeof(v);
+    if (RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, name, RRF_RT_REG_DWORD, NULL, &v, &sz) == ERROR_SUCCESS)
+        return (int)v;
+    return def;
+}
+
+static void setting_set(const wchar_t *name, int value)
+{
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, SETTINGS_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL) != ERROR_SUCCESS)
+        return;
+    DWORD v = (DWORD)value;
+    RegSetValueExW(k, name, 0, REG_DWORD, (const BYTE *)&v, sizeof(v));
+    RegCloseKey(k);
+}
+
 /* ---------------------------------------------------------------- 자동 실행 */
 static int autorun_enabled(void)
 {
@@ -837,7 +859,7 @@ static void apply(void)
 {
     overlay_set(overlay_transmission(g_level, g_split));
     int hw = hw_percent();
-    if (hw >= 0 && g_hw_ready) hw_request(hw);
+    if (hw >= 0 && g_hw_ready && g_use_hw) hw_request(hw);
     update_tray_tip();
     redraw();
 }
@@ -875,6 +897,10 @@ static void show_menu(HWND h)
         AppendMenuW(m, MF_STRING, CMD_LEVEL_BASE + levels[i], s);
     }
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(m, MF_STRING, CMD_RESTORE, L"원래 밝기로 되돌리기");
+    AppendMenuW(m, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(m, MF_STRING | (g_use_hw ? MF_CHECKED : 0) | (g_hw_original < 0 && g_hw_ready ? MF_GRAYED : 0),
+                CMD_USE_HW, L"모니터 밝기 직접 조절 (끄면 화면만 어둡게)");
     AppendMenuW(m, MF_STRING | (autorun_enabled() ? MF_CHECKED : 0), CMD_AUTORUN, L"Windows 시작 시 자동 실행");
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, CMD_EXIT, L"종료");
@@ -886,11 +912,22 @@ static void show_menu(HWND h)
     DestroyMenu(m);
 }
 
+/* 검은 막을 걷고 모니터 밝기를 프로그램 시작 전 값으로 */
+static void restore_original(void)
+{
+    if (g_hw_original >= 0) hw_request(g_hw_original);
+    g_split = (g_hw_original >= 0 && g_use_hw) ? HW_SPLIT : 100.0;
+    g_level = (g_hw_original >= 0 && g_use_hw) ? g_split + g_hw_original * (100.0 - g_split) / 100.0 : 100.0;
+    g_touched = 1;
+    apply();
+    show_panel(POS_TRAY, 0, 1500);
+}
+
 static void do_exit(void)
 {
-    /* 검은 막 구간(백라이트 0%)에서 끄면 원래 모니터 밝기로 되돌림 */
+    /* 종료하면 모니터 밝기를 프로그램 시작 전 값으로 되돌림 */
     EnterCriticalSection(&g_hw_cs);
-    if (g_hw_original >= 0 && g_level < g_split) g_hw_target = g_hw_original;
+    if (g_hw_original >= 0) g_hw_target = g_hw_original;
     g_hw_stop = 1;
     LeaveCriticalSection(&g_hw_cs);
     WakeConditionVariable(&g_hw_cv);
@@ -1010,6 +1047,12 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         int id = LOWORD(w);
         if (id == CMD_EXIT) do_exit();
         else if (id == CMD_AUTORUN) autorun_set(!autorun_enabled());
+        else if (id == CMD_RESTORE) restore_original();
+        else if (id == CMD_USE_HW) {
+            g_use_hw = !g_use_hw;
+            setting_set(L"UseHardware", g_use_hw);
+            restore_original();
+        }
         else if (id == CMD_SHOW) show_panel(POS_TRAY, 1, 2500);
         else if (id >= CMD_LEVEL_BASE && id <= CMD_LEVEL_BASE + 100) {
             set_level(id - CMD_LEVEL_BASE);
@@ -1034,8 +1077,8 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         int initial = (int)w;
         g_hw_ready = 1;
         g_hw_original = initial;
-        if (initial < 0) g_split = 100.0; /* 하드웨어 제어 불가 -> 전 구간 검은 막 */
-        else if (!g_touched) g_level = g_split + initial * (100.0 - g_split) / 100.0;
+        g_split = (initial >= 0 && g_use_hw) ? HW_SPLIT : 100.0; /* 쓸 수 없거나 끄면 전 구간 검은 막 */
+        if (initial >= 0 && g_use_hw && !g_touched) g_level = g_split + initial * (100.0 - g_split) / 100.0;
         apply();
         return 0;
     }
@@ -1141,6 +1184,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     set_dpi_awareness();
     g_dpi = system_dpi();
     read_theme();
+    g_use_hw = setting_get(L"UseHardware", 1);
+    if (!g_use_hw) g_split = 100.0;
     InitializeCriticalSection(&g_hw_cs);
     InitializeConditionVariable(&g_hw_cv);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
