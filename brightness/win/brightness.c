@@ -5,11 +5,13 @@
  *   - 트레이 아이콘 클릭 / 트레이 아이콘 위에서 마우스 휠
  *   - 전역 단축키 Ctrl+Alt+PageUp / PageDown / Home (화면 아래 가운데 HUD)
  *
- *  50~100% : 모니터 자체 밝기(백라이트) 0~100% — 외장 모니터 DDC/CI, 노트북 WMI
- *   1~50%  : 백라이트 최저 + 화면 전체에 클릭이 통과하는 검은 막(오버레이)
+ *  모니터마다 따로 조절 (패널에 모니터별 슬라이더)
+ *  20~100% : 모니터 자체 밝기(백라이트) 0~100% — 외장 모니터 DDC/CI, 노트북 WMI
+ *   1~20%  : 백라이트 최저 + 그 모니터에 클릭이 통과하는 검은 막(오버레이)
  *     0%   : 완전 검정 (꺼진 것처럼 보임)
  *
  *  실행 인자 --background : 패널을 띄우지 않고 조용히 시작 (자동 실행용)
+ *           --replace    : 실행 중인 인스턴스를 종료시키고 대신 실행 (모니터 구성 변경 시 재시작용)
  */
 #define COBJMACROS
 #define _WIN32_WINNT 0x0A00
@@ -27,12 +29,14 @@
 #include "resource.h"
 
 #define APP_NAME L"밝기조절"
-#define APP_VERSION 4   /* 실행 중인 예전 버전을 교체할 때 비교 */
+#define APP_VERSION 5   /* 실행 중인 예전 버전을 교체할 때 비교 */
 #define STEP 2.0
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE L"BrightnessControl"
 #define SETTINGS_KEY L"Software\\BrightnessControl"
 #define HW_SPLIT 20.0  /* 20~100%: 모니터 백라이트, 0~20%: 검은 막(백라이트 최저보다 더 어둡게) */
+#define MAX_MON 8
+#define MAX_PHYS_PER 4
 
 #define WM_APP_TRAY    (WM_APP + 1)
 #define WM_APP_HWREADY (WM_APP + 2)
@@ -40,26 +44,47 @@
 #define WM_APP_SHOW    (WM_APP + 4)
 
 enum { HK_UP = 1, HK_DOWN, HK_RESET };
-enum { TM_TOP = 1, TM_FADE, TM_IDLE };
-enum { CMD_EXIT = 100, CMD_AUTORUN, CMD_SHOW, CMD_USE_HW, CMD_RESTORE, CMD_LEVEL_BASE = 200 };
+enum { TM_TOP = 1, TM_FADE, TM_IDLE, TM_DISPLAY };
+enum { CMD_EXIT = 100, CMD_AUTORUN, CMD_SHOW, CMD_RESTORE, CMD_USE_HW_BASE = 150, CMD_LEVEL_BASE = 200 };
 enum { WHEEL_FROM_PANEL = 0, WHEEL_FROM_TRAY = 1 };
 enum { POS_TRAY, POS_HUD };
 
+/* ---------------------------------------------------------------- 모니터 */
+typedef struct {
+    /* 메인 스레드 */
+    HMONITOR hmon;
+    RECT rc;
+    wchar_t dev[CCHDEVICENAME];
+    wchar_t name[64];
+    HWND overlay;
+    int overlay_trans;   /* 0..255, 255 = 숨김, -1 = 아직 없음 */
+    double level;        /* 0..100 */
+    double split;        /* 모니터 밝기를 쓰면 HW_SPLIT, 아니면 100 (전 구간 검은 막) */
+    int use_hw;          /* 설정: 이 모니터의 밝기를 직접 조절 */
+    int hw_original;     /* 시작 시 모니터 밝기 (-1 = 조절 불가) — HWREADY 이후 유효 */
+    /* 작업 스레드 */
+    HANDLE phys[MAX_PHYS_PER];
+    DWORD mn[MAX_PHYS_PER], mx[MAX_PHYS_PER];
+    int nphys;
+    int wmi;             /* 노트북 내장 화면 (WMI 로 조절) */
+    int target;          /* 요청값 (-1 = 없음), g_hw_cs 로 보호 */
+    int last;
+} Mon;
+
+static Mon g_mon[MAX_MON];
+static int g_nmon;
+
 /* ---------------------------------------------------------------- 전역 상태 */
 static HINSTANCE g_inst;
-static HWND g_main, g_overlay;
+static HWND g_main;
 static HHOOK g_mouse_hook;
 static UINT g_taskbar_created;
 static NOTIFYICONDATAW g_nid;
 
-static double g_level = 100.0;   /* 0..100 */
-static double g_split = HW_SPLIT; /* 모니터 밝기를 쓰지 않으면 100 (전 구간 검은 막) */
-static int g_use_hw = 1;          /* 설정: 모니터 밝기(DDC/WMI) 직접 조절 */
 static int g_hw_ready = 0;
-static int g_hw_original = -1;
 static int g_touched = 0;
-static int g_overlay_trans = -1; /* 0..255, 255 = 숨김 */
-static int g_dragging = 0;
+static int g_active = 0;         /* 마지막으로 조절한 모니터 (캡션 표시용) */
+static int g_drag_row = -1;
 static int g_wheel_accum = 0;
 static UINT g_dpi = 96;
 
@@ -80,12 +105,15 @@ static DWORD g_deact_tick;       /* 바깥 클릭으로 닫힌 시각 (트레이
 
 /* 패널 디자인 기준(96 DPI) */
 #define PW 300      /* 패널 너비 */
-#define PH 112      /* 패널 높이 */
 #define PM 28       /* 그림자 여백 */
 #define PR 18       /* 모서리 반경 */
-#define TRACK_X 16
-#define TRACK_Y 44
-#define TRACK_H 28
+#define PAD 16
+#define ROWS_Y 44   /* 첫 모니터 줄 시작 */
+#define ROW_H 58    /* 모니터 한 줄: 이름 18 + 간격 4 + 슬라이더 26 + 간격 10 */
+#define LABEL_H 18
+#define TRACK_DY 22
+#define TRACK_H 26
+#define PH (ROWS_Y + ROW_H * (g_nmon > 0 ? g_nmon : 1) + 28)   /* 패널 높이 (캡션 포함) */
 
 /* ---------------------------------------------------------------- 밝기 곡선 */
 /* 0..split 구간 -> 오버레이 투과량(0~255). 어두운 쪽을 촘촘하게 (감마 2.2). */
@@ -99,52 +127,161 @@ static int overlay_transmission(double level, double split)
     return v < 1 ? 1 : (v > 255 ? 255 : v);
 }
 
-static int hw_percent(void)
+static int hw_percent(const Mon *m)
 {
-    if (g_split >= 100.0) return -1;
-    double v = g_level - g_split;
+    if (m->split >= 100.0) return -1;
+    double v = m->level - m->split;
     if (v < 0) v = 0;
-    return (int)lround(v * 100.0 / (100.0 - g_split));
+    return (int)lround(v * 100.0 / (100.0 - m->split));
+}
+
+/* 시작 시 모니터 밝기 -> 슬라이더 위치 */
+static double level_from_hw(const Mon *m)
+{
+    if (m->hw_original < 0 || !m->use_hw) return 100.0;
+    return HW_SPLIT + m->hw_original * (100.0 - HW_SPLIT) / 100.0;
+}
+
+/* ---------------------------------------------------------------- 모니터 목록 */
+static BOOL CALLBACK enum_collect(HMONITOR hmon, HDC hdc, LPRECT rc, LPARAM lp)
+{
+    (void)hdc; (void)rc; (void)lp;
+    if (g_nmon >= MAX_MON) return FALSE;
+    Mon *m = &g_mon[g_nmon];
+    ZeroMemory(m, sizeof(*m));
+    MONITORINFOEXW mi;
+    ZeroMemory(&mi, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (!GetMonitorInfoW(hmon, (MONITORINFO *)&mi)) return TRUE;
+    m->hmon = hmon;
+    m->rc = mi.rcMonitor;
+    wcsncpy(m->dev, mi.szDevice, CCHDEVICENAME - 1);
+    g_nmon++;
+    return TRUE;
+}
+
+/* 모니터 이름 (EDID 이름, 예: "LG ULTRAGEAR") */
+static void monitor_names(void)
+{
+    UINT32 np = 0, nm = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &np, &nm) == ERROR_SUCCESS && np > 0) {
+        DISPLAYCONFIG_PATH_INFO *paths = (DISPLAYCONFIG_PATH_INFO *)calloc(np, sizeof(*paths));
+        DISPLAYCONFIG_MODE_INFO *modes = (DISPLAYCONFIG_MODE_INFO *)calloc(nm ? nm : 1, sizeof(*modes));
+        if (paths && modes && QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &np, paths, &nm, modes, NULL) == ERROR_SUCCESS) {
+            for (UINT32 i = 0; i < np; i++) {
+                DISPLAYCONFIG_SOURCE_DEVICE_NAME src;
+                ZeroMemory(&src, sizeof(src));
+                src.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+                src.header.size = sizeof(src);
+                src.header.adapterId = paths[i].sourceInfo.adapterId;
+                src.header.id = paths[i].sourceInfo.id;
+                if (DisplayConfigGetDeviceInfo(&src.header) != ERROR_SUCCESS) continue;
+                DISPLAYCONFIG_TARGET_DEVICE_NAME tgt;
+                ZeroMemory(&tgt, sizeof(tgt));
+                tgt.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+                tgt.header.size = sizeof(tgt);
+                tgt.header.adapterId = paths[i].targetInfo.adapterId;
+                tgt.header.id = paths[i].targetInfo.id;
+                if (DisplayConfigGetDeviceInfo(&tgt.header) != ERROR_SUCCESS || !tgt.monitorFriendlyDeviceName[0])
+                    continue;
+                for (int k = 0; k < g_nmon; k++)
+                    if (!g_mon[k].name[0] && wcscmp(g_mon[k].dev, src.viewGdiDeviceName) == 0)
+                        wcsncpy(g_mon[k].name, tgt.monitorFriendlyDeviceName, 63);
+            }
+        }
+        free(paths);
+        free(modes);
+    }
+    for (int k = 0; k < g_nmon; k++) {
+        if (!g_mon[k].name[0]) swprintf(g_mon[k].name, 64, L"모니터 %d", k + 1);
+        /* 같은 이름이 있으면 번호를 붙임 */
+        for (int j = 0; j < k; j++)
+            if (wcscmp(g_mon[j].name, g_mon[k].name) == 0) {
+                wchar_t t[64];
+                swprintf(t, 64, L"%ls (%d)", g_mon[k].name, k + 1);
+                wcscpy(g_mon[k].name, t);
+                break;
+            }
+    }
+}
+
+static int setting_get(const wchar_t *name, int def);
+static void setting_set(const wchar_t *name, int value);
+
+static void use_hw_key(const Mon *m, wchar_t *buf, size_t n)
+{
+    swprintf(buf, n, L"UseHardware:%ls", m->name);
+}
+
+static void enumerate_monitors(void)
+{
+    g_nmon = 0;
+    EnumDisplayMonitors(NULL, NULL, enum_collect, 0);
+    /* 화면 배치 순서(왼쪽 -> 오른쪽, 위 -> 아래)로 정렬 */
+    for (int i = 1; i < g_nmon; i++)
+        for (int j = i; j > 0; j--) {
+            RECT a = g_mon[j - 1].rc, b = g_mon[j].rc;
+            if (b.left < a.left || (b.left == a.left && b.top < a.top)) {
+                Mon t = g_mon[j - 1];
+                g_mon[j - 1] = g_mon[j];
+                g_mon[j] = t;
+            }
+        }
+#ifdef FAKE_DUAL /* 테스트 전용: 모니터 하나를 좌우로 나눠 듀얼 모니터처럼 */
+    if (g_nmon == 1) {
+        g_mon[1] = g_mon[0];
+        g_mon[0].rc.right = g_mon[1].rc.left = (g_mon[0].rc.left + g_mon[0].rc.right) / 2;
+        g_nmon = 2;
+    }
+#endif
+    monitor_names();
+    for (int i = 0; i < g_nmon; i++) {
+        Mon *m = &g_mon[i];
+        wchar_t key[96];
+        use_hw_key(m, key, 96);
+        m->use_hw = setting_get(key, 1);
+        m->hw_original = -1;
+        m->split = 100.0;   /* 모니터 밝기 확인 전에는 검은 막만 */
+        m->level = 100.0;
+        m->overlay_trans = -1;
+        m->target = -1;
+        m->last = -1;
+    }
 }
 
 /* ---------------------------------------------------------------- 하드웨어: DDC/CI */
-#define MAX_PHYS 16
-typedef struct { HANDLE h; DWORD mn, mx, cur; } Phys;
-static Phys g_phys[MAX_PHYS];
-static int g_nphys;
-
-static BOOL CALLBACK enum_mon(HMONITOR hmon, HDC hdc, LPRECT rc, LPARAM lp)
+static void ddc_set(Mon *m, int pct)
 {
-    (void)hdc; (void)rc; (void)lp;
+    for (int i = 0; i < m->nphys; i++) {
+        DWORD v = m->mn[i] + (DWORD)lround((m->mx[i] - m->mn[i]) * pct / 100.0);
+        SetMonitorBrightness(m->phys[i], v);
+    }
+}
+
+static int ddc_open(Mon *m)
+{
+    int orig = -1;
     DWORD n = 0;
-    if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hmon, &n) || n == 0) return TRUE;
+    if (!GetNumberOfPhysicalMonitorsFromHMONITOR(m->hmon, &n) || n == 0) return -1;
     PHYSICAL_MONITOR *arr = (PHYSICAL_MONITOR *)calloc(n, sizeof(*arr));
-    if (!arr) return TRUE;
-    if (GetPhysicalMonitorsFromHMONITOR(hmon, n, arr)) {
-        for (DWORD i = 0; i < n; i++) {
+    if (!arr) return -1;
+    if (GetPhysicalMonitorsFromHMONITOR(m->hmon, n, arr)) {
+        for (DWORD j = 0; j < n; j++) {
             DWORD mn, cur, mx;
-            if (g_nphys < MAX_PHYS &&
-                GetMonitorBrightness(arr[i].hPhysicalMonitor, &mn, &cur, &mx) && mx > mn) {
-                g_phys[g_nphys].h = arr[i].hPhysicalMonitor;
-                g_phys[g_nphys].mn = mn;
-                g_phys[g_nphys].mx = mx;
-                g_phys[g_nphys].cur = cur;
-                g_nphys++;
+            if (m->nphys < MAX_PHYS_PER &&
+                GetMonitorBrightness(arr[j].hPhysicalMonitor, &mn, &cur, &mx) && mx > mn) {
+                if (m->nphys == 0) orig = (int)lround((cur - mn) * 100.0 / (mx - mn));
+                m->phys[m->nphys] = arr[j].hPhysicalMonitor;
+                m->mn[m->nphys] = mn;
+                m->mx[m->nphys] = mx;
+                m->nphys++;
             } else {
-                DestroyPhysicalMonitor(arr[i].hPhysicalMonitor);
+                DestroyPhysicalMonitor(arr[j].hPhysicalMonitor);
             }
         }
     }
     free(arr);
-    return TRUE;
-}
-
-static void ddc_set(int pct)
-{
-    for (int i = 0; i < g_nphys; i++) {
-        DWORD v = g_phys[i].mn + (DWORD)lround((g_phys[i].mx - g_phys[i].mn) * pct / 100.0);
-        SetMonitorBrightness(g_phys[i].h, v);
-    }
+    return orig;
 }
 
 /* ---------------------------------------------------------------- 하드웨어: WMI (노트북) */
@@ -238,18 +375,18 @@ static void wmi_set(int pct)
     IWbemClassObject_Release(inst);
 }
 
+
 /* ---------------------------------------------------------------- 하드웨어 작업 스레드 */
-/* DDC/WMI 호출은 느려서(수십~수백 ms) 별도 스레드가 '마지막 요청값'만 적용한다. */
+/* DDC/WMI 호출은 느려서(수십~수백 ms) 별도 스레드가 모니터별 '마지막 요청값'만 적용한다. */
 static CRITICAL_SECTION g_hw_cs;
 static CONDITION_VARIABLE g_hw_cv;
-static int g_hw_target = -1;
 static int g_hw_stop = 0;
 static HANDLE g_hw_thread;
 
-static void hw_request(int pct)
+static void hw_request(int i, int pct)
 {
     EnterCriticalSection(&g_hw_cs);
-    g_hw_target = pct;
+    g_mon[i].target = pct;
     LeaveCriticalSection(&g_hw_cs);
     WakeConditionVariable(&g_hw_cv);
 }
@@ -261,73 +398,98 @@ static DWORD WINAPI hw_thread(LPVOID p)
     CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT,
                          RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
 
-    EnumDisplayMonitors(NULL, NULL, enum_mon, 0);
-    int wmi_cur = -1;
+    int orig[MAX_MON];
+    for (int i = 0; i < g_nmon; i++) orig[i] = ddc_open(&g_mon[i]);
+
+    /* 노트북 내장 화면: DDC 가 안 되는 첫 모니터를 WMI 로 조절 */
     if (wmi_init()) {
-        wmi_cur = wmi_get();
-        if (wmi_cur < 0) { IWbemServices_Release(g_wmi); g_wmi = NULL; }
+        int cur = wmi_get();
+        int used = 0;
+        if (cur >= 0)
+            for (int i = 0; i < g_nmon; i++)
+                if (g_mon[i].nphys == 0) {
+                    g_mon[i].wmi = 1;
+                    orig[i] = cur;
+                    used = 1;
+                    break;
+                }
+        if (!used) {
+            IWbemServices_Release(g_wmi);
+            g_wmi = NULL;
+        }
     }
 
-    int initial = -1;
-    if (g_nphys > 0)
-        initial = (int)lround((g_phys[0].cur - g_phys[0].mn) * 100.0 / (g_phys[0].mx - g_phys[0].mn));
-    else if (wmi_cur >= 0)
-        initial = wmi_cur;
-    PostMessageW(g_main, WM_APP_HWREADY, (WPARAM)initial, 0);
+    EnterCriticalSection(&g_hw_cs);
+    for (int i = 0; i < g_nmon; i++) {
+        g_mon[i].hw_original = orig[i];
+        g_mon[i].last = orig[i];
+    }
+    LeaveCriticalSection(&g_hw_cs);
+    PostMessageW(g_main, WM_APP_HWREADY, 0, 0);
 
-    int last = initial;
     for (;;) {
+        int t[MAX_MON], any = 0;
         EnterCriticalSection(&g_hw_cs);
-        while (g_hw_target < 0 && !g_hw_stop)
+        for (;;) {
+            any = 0;
+            for (int i = 0; i < g_nmon; i++) if (g_mon[i].target >= 0) any = 1;
+            if (any || g_hw_stop) break;
             SleepConditionVariableCS(&g_hw_cv, &g_hw_cs, INFINITE);
-        int pct = g_hw_target, stopping = g_hw_stop;
-        g_hw_target = -1;
+        }
+        for (int i = 0; i < g_nmon; i++) {
+            t[i] = g_mon[i].target;
+            g_mon[i].target = -1;
+        }
+        int stopping = g_hw_stop;
         LeaveCriticalSection(&g_hw_cs);
 
-        if (pct >= 0 && pct != last) {
-            ddc_set(pct);
-            wmi_set(pct);
-            last = pct;
+        for (int i = 0; i < g_nmon; i++) {
+            Mon *m = &g_mon[i];
+            if (t[i] < 0 || t[i] == m->last) continue;
+            if (m->nphys) ddc_set(m, t[i]);
+            if (m->wmi) wmi_set(t[i]);
+            m->last = t[i];
         }
         if (stopping) break;
     }
 
-    for (int i = 0; i < g_nphys; i++) DestroyPhysicalMonitor(g_phys[i].h);
+    for (int i = 0; i < g_nmon; i++)
+        for (int j = 0; j < g_mon[i].nphys; j++) DestroyPhysicalMonitor(g_mon[i].phys[j]);
     if (g_wmi) IWbemServices_Release(g_wmi);
     CoUninitialize();
     return 0;
 }
 
-/* ---------------------------------------------------------------- 오버레이 */
-static void overlay_fit(void)
-{
-    int x = GetSystemMetrics(SM_XVIRTUALSCREEN), y = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    int w = GetSystemMetrics(SM_CXVIRTUALSCREEN), h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-    SetWindowPos(g_overlay, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE);
-}
-
+/* ---------------------------------------------------------------- 오버레이 (모니터별) */
 static void raise_windows(void)
 {
     /* 작업표시줄 등 다른 최상위 창이 덮어도 오버레이 -> 패널 순서로 다시 맨 위로 */
-    if (g_overlay_trans < 255)
-        SetWindowPos(g_overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    for (int i = 0; i < g_nmon; i++)
+        if (g_mon[i].overlay_trans >= 0 && g_mon[i].overlay_trans < 255)
+            SetWindowPos(g_mon[i].overlay, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     if (g_shown)
         SetWindowPos(g_main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
-static void overlay_set(int trans)
+static void overlay_fit(Mon *m)
 {
-    if (trans == g_overlay_trans) return;
-    int was_hidden = g_overlay_trans < 0 || g_overlay_trans >= 255;
-    g_overlay_trans = trans;
+    SetWindowPos(m->overlay, HWND_TOPMOST, m->rc.left, m->rc.top,
+                 m->rc.right - m->rc.left, m->rc.bottom - m->rc.top, SWP_NOACTIVATE);
+}
+
+static void overlay_set(Mon *m, int trans)
+{
+    if (trans == m->overlay_trans) return;
+    int was_hidden = m->overlay_trans < 0 || m->overlay_trans >= 255;
+    m->overlay_trans = trans;
     if (trans >= 255) {
-        ShowWindow(g_overlay, SW_HIDE);
+        ShowWindow(m->overlay, SW_HIDE);
         return;
     }
-    SetLayeredWindowAttributes(g_overlay, 0, (BYTE)(255 - trans), LWA_ALPHA);
+    SetLayeredWindowAttributes(m->overlay, 0, (BYTE)(255 - trans), LWA_ALPHA);
     if (was_hidden) {
-        overlay_fit();
-        ShowWindow(g_overlay, SW_SHOWNOACTIVATE);
+        overlay_fit(m);
+        ShowWindow(m->overlay, SW_SHOWNOACTIVATE);
         raise_windows();
     }
 }
@@ -507,6 +669,7 @@ static void draw_text(Canvas *c, const wchar_t *s, RECT rc, HFONT f, UINT fmt, R
         }
 }
 
+
 /* ---------------------------------------------------------------- 패널 */
 static RECT panel_rect_client(void) /* 창 안에서 패널(그림자 제외) 위치 */
 {
@@ -531,38 +694,59 @@ static int in_close(int x, int y)
     return dx * dx + dy * dy <= hit * hit;
 }
 
-static void track_geom(double *x0, double *y0, double *x1, double *y1)
+static int row_top(int i) { return panel_rect_client().top + S(ROWS_Y + ROW_H * i); }
+
+static void track_geom(int i, double *x0, double *y0, double *x1, double *y1)
 {
     RECT p = panel_rect_client();
-    *x0 = p.left + S(TRACK_X);
-    *x1 = p.right - S(TRACK_X);
-    *y0 = p.top + S(TRACK_Y);
+    *x0 = p.left + S(PAD);
+    *x1 = p.right - S(PAD);
+    *y0 = row_top(i) + S(TRACK_DY);
     *y1 = *y0 + S(TRACK_H);
 }
 
-static void format_level(wchar_t *buf, size_t n)
+/* 클라이언트 y 좌표가 몇 번째 모니터 줄인지 (-1 = 줄 밖) */
+static int row_at(int y)
 {
-    if (g_level < 10 && g_level != floor(g_level))
-        swprintf(buf, n, L"%.1f%%", g_level);
+    for (int i = 0; i < g_nmon; i++) {
+        int t = row_top(i);
+        if (y >= t - S(4) && y < t + S(TRACK_DY + TRACK_H + 6)) return i;
+    }
+    return -1;
+}
+
+static void format_level(double level, wchar_t *buf, size_t n)
+{
+    if (level < 10 && level != floor(level))
+        swprintf(buf, n, L"%.1f%%", level);
     else
-        swprintf(buf, n, L"%d%%", (int)lround(g_level));
+        swprintf(buf, n, L"%d%%", (int)lround(level));
 }
 
 static void mode_text(wchar_t *buf, size_t n)
 {
-    int hw = hw_percent();
+    const Mon *m = &g_mon[g_active < g_nmon ? g_active : 0];
+    int hw = hw_percent(m);
+    wchar_t t[96];
     if (g_show_hint)
-        wcsncpy(buf, L"아이콘 클릭 또는 아이콘 위에서 휠로 조절", n);
+        wcsncpy(t, L"아이콘 클릭 또는 아이콘 위에서 휠로 조절", 96);
     else if (!g_hw_ready)
-        wcsncpy(buf, L"모니터 확인 중…", n);
-    else if (g_level <= 0)
-        wcsncpy(buf, L"화면 꺼짐 · Ctrl+Alt+Home 으로 복구", n);
-    else if (g_level < g_split)
-        wcsncpy(buf, g_split < 100 ? L"모니터 최저 밝기 + 화면 어둡게" : L"화면 어둡게", n);
+        wcsncpy(t, L"모니터 확인 중…", 96);
+    else if (m->level <= 0)
+        wcsncpy(t, L"화면 꺼짐 · Ctrl+Alt+Home 으로 복구", 96);
+    else if (m->split < 100.0 && m->level < m->split)
+        wcsncpy(t, L"모니터 최저 밝기 + 화면 어둡게", 96);
     else if (hw >= 0)
-        swprintf(buf, n, L"모니터 밝기 %d%%", hw);
+        swprintf(t, 96, L"모니터 밝기 %d%%", hw);
+    else if (m->hw_original < 0)
+        wcsncpy(t, m->level < 100 ? L"화면 어둡게 (모니터 자체 조절 미지원)" : L"모니터 자체 조절 미지원", 96);
     else
-        wcsncpy(buf, L"원래 밝기", n);
+        wcsncpy(t, m->level < 100 ? L"화면 어둡게 (모니터 밝기는 그대로)" : L"원래 밝기", 96);
+    t[95] = 0;
+    if (g_nmon > 1 && !g_show_hint && g_hw_ready)
+        swprintf(buf, n, L"%ls · %ls", m->name, t);
+    else
+        wcsncpy(buf, t, n);
     buf[n - 1] = 0;
 }
 
@@ -599,16 +783,14 @@ static void render_panel(void)
     stroke_rrect(&g_cv, p.left, p.top, p.right, p.bottom, r, 1.0, border);
 
     HFONT f_title = make_font(L"Malgun Gothic", 13, FW_BOLD);
-    HFONT f_value = make_font(L"Segoe UI Semibold", 13, FW_SEMIBOLD);
+    HFONT f_name = make_font(L"Malgun Gothic", 12, FW_NORMAL);
+    HFONT f_value = make_font(L"Segoe UI Semibold", 12, FW_SEMIBOLD);
     HFONT f_caption = make_font(L"Malgun Gothic", 12, FW_NORMAL);
 
-    RECT rt = {p.left + S(16), p.top + S(12), p.right - S(60), p.top + S(36)};
+    RECT rt = {p.left + S(PAD), p.top + S(12), p.right - S(60), p.top + S(36)};
     draw_text(&g_cv, L"디스플레이", rt, f_title, DT_LEFT | DT_VCENTER, primary);
-    wchar_t lv[16];
-    format_level(lv, 16);
-    RECT rv = {p.right - S(110), p.top + S(12), p.right - S(46), p.top + S(36)};
-    draw_text(&g_cv, lv, rv, f_value, DT_RIGHT | DT_VCENTER, secondary);
 
+    /* 닫기 버튼 */
     double ccx, ccy, ccr;
     close_geom(&ccx, &ccy, &ccr);
     Rgba cbg = track;
@@ -628,22 +810,35 @@ static void render_panel(void)
             }
     }
 
-    /* 캡슐 슬라이더: 채움은 최소 트랙 높이(원)부터 시작 — macOS 제어 센터와 동일 */
-    double tx0, ty0, tx1, ty1;
-    track_geom(&tx0, &ty0, &tx1, &ty1);
-    double th = ty1 - ty0, tr = th / 2;
-    fill_rrect(&g_cv, tx0, ty0, tx1, ty1, tr, track);
-    double fw = th + (tx1 - tx0 - th) * g_level / 100.0;
-    if (!g_dark) shadow_rrect(&g_cv, tx0, ty0 + 1, tx0 + fw, ty1 + 1, tr, S(3), 0.10);
-    fill_rrect(&g_cv, tx0, ty0, tx0 + fw, ty1, tr, fill);
-    draw_sun(&g_cv, tx0 + tr, ty0 + tr, th * 0.62, glyph);
+    /* 모니터별 줄: 이름 + 값 + 캡슐 슬라이더 (채움은 최소 트랙 높이(원)부터 — macOS 제어 센터와 동일) */
+    for (int i = 0; i < g_nmon; i++) {
+        Mon *m = &g_mon[i];
+        int top = row_top(i);
+        RECT rn = {p.left + S(PAD), top, p.right - S(70), top + S(LABEL_H)};
+        draw_text(&g_cv, m->name, rn, f_name, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, secondary);
+        wchar_t lv[16];
+        format_level(m->level, lv, 16);
+        RECT rv = {p.right - S(80), top, p.right - S(PAD), top + S(LABEL_H)};
+        draw_text(&g_cv, lv, rv, f_value, DT_RIGHT | DT_VCENTER, secondary);
 
-    wchar_t mode[96];
-    mode_text(mode, 96);
-    RECT rm = {p.left + S(16), p.top + S(80), p.right - S(16), p.top + S(100)};
+        double tx0, ty0, tx1, ty1;
+        track_geom(i, &tx0, &ty0, &tx1, &ty1);
+        double th = ty1 - ty0, tr = th / 2;
+        fill_rrect(&g_cv, tx0, ty0, tx1, ty1, tr, track);
+        double fw = th + (tx1 - tx0 - th) * m->level / 100.0;
+        if (!g_dark) shadow_rrect(&g_cv, tx0, ty0 + 1, tx0 + fw, ty1 + 1, tr, S(3), 0.10);
+        fill_rrect(&g_cv, tx0, ty0, tx0 + fw, ty1, tr, fill);
+        draw_sun(&g_cv, tx0 + tr, ty0 + tr, th * 0.62, glyph);
+    }
+
+    wchar_t mode[160];
+    mode_text(mode, 160);
+    int cy = row_top(g_nmon) - S(6);
+    RECT rm = {p.left + S(PAD), cy, p.right - S(PAD), cy + S(20)};
     draw_text(&g_cv, mode, rm, f_caption, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, secondary);
 
     DeleteObject(f_title);
+    DeleteObject(f_name);
     DeleteObject(f_value);
     DeleteObject(f_caption);
 }
@@ -679,13 +874,29 @@ static void read_theme(void)
         g_taskbar_dark = v == 0;
 }
 
+static UINT monitor_dpi(HMONITOR mon)
+{
+    typedef HRESULT(WINAPI * Fn)(HMONITOR, int, UINT *, UINT *);
+    static Fn f;
+    static int tried;
+    if (!tried) {
+        HMODULE sh = LoadLibraryW(L"shcore.dll");
+        if (sh) f = (Fn)(void *)GetProcAddress(sh, "GetDpiForMonitor");
+        tried = 1;
+    }
+    UINT x = 96, y = 96;
+    if (f && SUCCEEDED(f(mon, 0 /* MDT_EFFECTIVE_DPI */, &x, &y))) return x;
+    return g_dpi;
+}
+
 static void place_panel(int where)
 {
-    int W = S(PW + 2 * PM), H = S(PH + 2 * PM);
     POINT pt;
     GetCursorPos(&pt);
     HMONITOR mon = where == POS_HUD ? MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY)
                                     : MonitorFromWindow(FindWindowW(L"Shell_TrayWnd", NULL), MONITOR_DEFAULTTOPRIMARY);
+    g_dpi = monitor_dpi(mon); /* 모니터마다 배율이 다를 수 있음 */
+    int W = S(PW + 2 * PM), H = S(PH + 2 * PM);
     MONITORINFO mi;
     ZeroMemory(&mi, sizeof(mi));
     mi.cbSize = sizeof(mi);
@@ -732,7 +943,7 @@ static void hide_panel(void)
     if (!g_shown) return;
     g_shown = 0;
     g_activated = 0;
-    g_dragging = 0;
+    g_drag_row = -1;
     ReleaseCapture();
     SetTimer(g_main, TM_FADE, 15, NULL);
 }
@@ -775,6 +986,18 @@ static HICON tray_icon(void)
                              IMAGE_ICON, sz, sz, 0);
 }
 
+static void tray_tip_text(wchar_t *buf, size_t n)
+{
+    wchar_t lv[64] = L"";
+    for (int i = 0; i < g_nmon; i++) {
+        wchar_t one[16];
+        format_level(g_mon[i].level, one, 16);
+        if (i) wcscat(lv, L" · ");
+        wcscat(lv, one);
+    }
+    swprintf(buf, n, L"밝기 %ls\n아이콘 위에서 휠로 조절", lv);
+}
+
 static void update_tray(int add)
 {
     if (add) {
@@ -786,18 +1009,14 @@ static void update_tray(int add)
     }
     if (g_nid.hIcon) DestroyIcon(g_nid.hIcon);
     g_nid.hIcon = tray_icon();
-    wchar_t lv[16];
-    format_level(lv, 16);
-    swprintf(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"밝기 %ls · 아이콘 위에서 휠로 조절", lv);
+    tray_tip_text(g_nid.szTip, ARRAYSIZE(g_nid.szTip));
     g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     Shell_NotifyIconW(add ? NIM_ADD : NIM_MODIFY, &g_nid);
 }
 
 static void update_tray_tip(void)
 {
-    wchar_t lv[16];
-    format_level(lv, 16);
-    swprintf(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"밝기 %ls · 아이콘 위에서 휠로 조절", lv);
+    tray_tip_text(g_nid.szTip, ARRAYSIZE(g_nid.szTip));
     g_nid.uFlags = NIF_TIP;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
 }
@@ -855,52 +1074,97 @@ static void autorun_set(int on)
 }
 
 /* ---------------------------------------------------------------- 밝기 적용 */
-static void apply(void)
+static void apply_mon(int i)
 {
-    overlay_set(overlay_transmission(g_level, g_split));
-    int hw = hw_percent();
-    if (hw >= 0 && g_hw_ready && g_use_hw) hw_request(hw);
+    Mon *m = &g_mon[i];
+    overlay_set(m, overlay_transmission(m->level, m->split));
+    int hw = hw_percent(m);
+    if (hw >= 0 && g_hw_ready && m->use_hw) hw_request(i, hw);
+}
+
+static void apply_all(void)
+{
+    for (int i = 0; i < g_nmon; i++) apply_mon(i);
     update_tray_tip();
     redraw();
 }
 
-static void set_level(double v)
+static void set_level(int i, double v)
 {
     g_touched = 1;
     g_show_hint = 0;
+    g_active = i;
     v = round(v * 2.0) / 2.0;
-    g_level = v < 0 ? 0 : (v > 100 ? 100 : v);
+    g_mon[i].level = v < 0 ? 0 : (v > 100 ? 100 : v);
     g_last_activity = GetTickCount();
-    apply();
+    apply_mon(i);
+    update_tray_tip();
+    redraw();
 }
 
-static void step(double d) { set_level(g_level + d); }
+/* i < 0 이면 모든 모니터 */
+static void step(int i, double d)
+{
+    if (i >= 0) {
+        set_level(i, g_mon[i].level + d);
+        return;
+    }
+    for (int k = 0; k < g_nmon; k++) set_level(k, g_mon[k].level + d);
+}
 
-static void track_set_from_x(int x)
+static void set_all(double v)
+{
+    for (int k = 0; k < g_nmon; k++) set_level(k, v);
+}
+
+static void track_set_from_x(int i, int x)
 {
     double tx0, ty0, tx1, ty1;
-    track_geom(&tx0, &ty0, &tx1, &ty1);
+    track_geom(i, &tx0, &ty0, &tx1, &ty1);
     double th = ty1 - ty0;
     double t = (x - tx0 - th / 2) / (tx1 - tx0 - th);
     if (t < 0) t = 0;
     if (t > 1) t = 1;
-    set_level(round(t * 100.0));
+    set_level(i, round(t * 100.0));
+}
+
+/* 검은 막을 걷고 모니터 밝기를 프로그램 시작 전 값으로 */
+static void restore_mon(int i)
+{
+    Mon *m = &g_mon[i];
+    if (m->hw_original >= 0) hw_request(i, m->hw_original);
+    m->split = (m->hw_original >= 0 && m->use_hw) ? HW_SPLIT : 100.0;
+    m->level = level_from_hw(m);
+    apply_mon(i);
+}
+
+static void restore_all(void)
+{
+    g_touched = 1;
+    for (int i = 0; i < g_nmon; i++) restore_mon(i);
+    update_tray_tip();
+    show_panel(POS_TRAY, 0, 1500);
 }
 
 static void show_menu(HWND h)
 {
     HMENU m = CreatePopupMenu();
     static const int levels[] = {100, 75, 50, 25, 10, 0};
-    wchar_t s[16];
+    wchar_t s[128];
     for (int i = 0; i < 6; i++) {
-        swprintf(s, 16, L"%d%%", levels[i]);
+        swprintf(s, 128, g_nmon > 1 ? L"모두 %d%%" : L"%d%%", levels[i]);
         AppendMenuW(m, MF_STRING, CMD_LEVEL_BASE + levels[i], s);
     }
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, CMD_RESTORE, L"원래 밝기로 되돌리기");
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(m, MF_STRING | (g_use_hw ? MF_CHECKED : 0) | (g_hw_original < 0 && g_hw_ready ? MF_GRAYED : 0),
-                CMD_USE_HW, L"모니터 밝기 직접 조절 (끄면 화면만 어둡게)");
+    for (int i = 0; i < g_nmon; i++) {
+        const Mon *mo = &g_mon[i];
+        int unsupported = g_hw_ready && mo->hw_original < 0;
+        swprintf(s, 128, unsupported ? L"모니터 밝기 직접 조절: %ls (지원 안 함)" : L"모니터 밝기 직접 조절: %ls", mo->name);
+        AppendMenuW(m, MF_STRING | (mo->use_hw && !unsupported ? MF_CHECKED : 0) | (unsupported ? MF_GRAYED : 0),
+                    CMD_USE_HW_BASE + i, s);
+    }
     AppendMenuW(m, MF_STRING | (autorun_enabled() ? MF_CHECKED : 0), CMD_AUTORUN, L"Windows 시작 시 자동 실행");
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, CMD_EXIT, L"종료");
@@ -912,26 +1176,16 @@ static void show_menu(HWND h)
     DestroyMenu(m);
 }
 
-/* 검은 막을 걷고 모니터 밝기를 프로그램 시작 전 값으로 */
-static void restore_original(void)
-{
-    if (g_hw_original >= 0) hw_request(g_hw_original);
-    g_split = (g_hw_original >= 0 && g_use_hw) ? HW_SPLIT : 100.0;
-    g_level = (g_hw_original >= 0 && g_use_hw) ? g_split + g_hw_original * (100.0 - g_split) / 100.0 : 100.0;
-    g_touched = 1;
-    apply();
-    show_panel(POS_TRAY, 0, 1500);
-}
-
 static void do_exit(void)
 {
-    /* 종료하면 모니터 밝기를 프로그램 시작 전 값으로 되돌림 */
+    /* 종료하면 모든 모니터 밝기를 프로그램 시작 전 값으로 되돌림 */
     EnterCriticalSection(&g_hw_cs);
-    if (g_hw_original >= 0) g_hw_target = g_hw_original;
+    for (int i = 0; i < g_nmon; i++)
+        if (g_mon[i].hw_original >= 0) g_mon[i].target = g_mon[i].hw_original;
     g_hw_stop = 1;
     LeaveCriticalSection(&g_hw_cs);
     WakeConditionVariable(&g_hw_cv);
-    overlay_set(255);
+    for (int i = 0; i < g_nmon; i++) overlay_set(&g_mon[i], 255);
     DestroyWindow(g_main);
 }
 
@@ -958,13 +1212,63 @@ static LRESULT CALLBACK mouse_hook(int code, WPARAM w, LPARAM l)
 
 static void on_wheel(int delta, int mods, int src)
 {
+    int row = -1; /* 트레이 위 휠, 또는 패널의 줄 밖: 모든 모니터 */
     if (src == WHEEL_FROM_TRAY && !g_shown) show_panel(POS_TRAY, 0, 1600);
+    if (src == WHEEL_FROM_PANEL) {
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(g_main, &pt);
+        row = row_at(pt.y);
+    }
     g_wheel_accum += delta;
     if (abs(g_wheel_accum) < WHEEL_DELTA / 4) return; /* 고해상도 휠 대응 */
     double n = (double)g_wheel_accum / WHEEL_DELTA;
     g_wheel_accum = 0;
     double mult = (mods & 1) ? 0.5 : ((mods & 2) ? 5.0 : 1.0);
-    step(n * STEP * mult);
+    step(row, n * STEP * mult);
+}
+
+/* 모니터 구성이 바뀌었으면(연결/해제) 새로 시작해서 목록을 다시 만든다 */
+static void check_display_change(void)
+{
+    int n = 0, changed = 0;
+    MONITORINFOEXW mi;
+    for (int i = 0; i < g_nmon; i++) {
+        ZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (!GetMonitorInfoW(g_mon[i].hmon, (MONITORINFO *)&mi) || wcscmp(mi.szDevice, g_mon[i].dev) != 0) {
+            changed = 1;
+            break;
+        }
+        g_mon[i].rc = mi.rcMonitor;
+    }
+    Mon save[MAX_MON];
+    memcpy(save, g_mon, sizeof(save));
+    int saved_n = g_nmon;
+    g_nmon = 0;
+    EnumDisplayMonitors(NULL, NULL, enum_collect, 0);
+    n = g_nmon;
+    memcpy(g_mon, save, sizeof(save));
+    g_nmon = saved_n;
+    if (n != g_nmon) changed = 1;
+
+    if (!changed) {
+        for (int i = 0; i < g_nmon; i++)
+            if (g_mon[i].overlay_trans >= 0 && g_mon[i].overlay_trans < 255) overlay_fit(&g_mon[i]);
+        return;
+    }
+    wchar_t exe[MAX_PATH], cmdline[MAX_PATH + 48];
+    GetModuleFileNameW(NULL, exe, MAX_PATH);
+    swprintf(cmdline, ARRAYSIZE(cmdline), L"\"%ls\" --background --replace", exe);
+    STARTUPINFOW si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi;
+    if (CreateProcessW(exe, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        /* 새 인스턴스가 g_msg_quit 를 보내 이 인스턴스를 종료시킴 */
+    }
 }
 
 static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -983,17 +1287,16 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
                  WHEEL_FROM_PANEL);
         return 0;
     case WM_LBUTTONDOWN: {
-        double tx0, ty0, tx1, ty1;
-        track_geom(&tx0, &ty0, &tx1, &ty1);
         int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
         if (in_close(x, y)) {
             hide_panel(); /* 패널만 닫고 트레이에서 계속 대기 */
             return 0;
         }
-        if (x >= tx0 - S(4) && x <= tx1 + S(4) && y >= ty0 - S(8) && y <= ty1 + S(8)) {
-            g_dragging = 1;
+        int row = row_at(y);
+        if (row >= 0) {
+            g_drag_row = row;
             SetCapture(h);
-            track_set_from_x(x);
+            track_set_from_x(row, x);
         }
         return 0;
     }
@@ -1008,7 +1311,7 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             TRACKMOUSEEVENT t = {sizeof(t), TME_LEAVE, h, HOVER_DEFAULT};
             TrackMouseEvent(&t);
         }
-        if (g_dragging) track_set_from_x(GET_X_LPARAM(l));
+        if (g_drag_row >= 0) track_set_from_x(g_drag_row, GET_X_LPARAM(l));
         return 0;
     }
     case WM_MOUSELEAVE:
@@ -1018,8 +1321,8 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         }
         return 0;
     case WM_LBUTTONUP:
-        if (g_dragging) {
-            g_dragging = 0;
+        if (g_drag_row >= 0) {
+            g_drag_row = -1;
             ReleaseCapture();
         }
         return 0;
@@ -1027,9 +1330,12 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         show_menu(h);
         return 0;
     case WM_KEYDOWN:
-        if (w == VK_UP || w == VK_RIGHT) step(STEP);
-        else if (w == VK_DOWN || w == VK_LEFT) step(-STEP);
-        else if (w == VK_ESCAPE || w == VK_RETURN) hide_panel();
+        if (w == VK_UP || w == VK_RIGHT) step(g_active, STEP);
+        else if (w == VK_DOWN || w == VK_LEFT) step(g_active, -STEP);
+        else if (w == VK_TAB && g_nmon > 1) {
+            g_active = (g_active + 1) % g_nmon;
+            redraw();
+        } else if (w == VK_ESCAPE || w == VK_RETURN) hide_panel();
         return 0;
     case WM_ACTIVATE:
         if (LOWORD(w) == WA_INACTIVE && g_activated) {
@@ -1038,24 +1344,30 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         }
         return 0;
     case WM_HOTKEY:
-        if (w == HK_UP) step(STEP);
-        else if (w == HK_DOWN) step(-STEP);
-        else if (w == HK_RESET) set_level(100);
+        if (w == HK_UP) step(-1, STEP);
+        else if (w == HK_DOWN) step(-1, -STEP);
+        else if (w == HK_RESET) set_all(100);
         if (!g_shown || !g_activated) show_panel(g_shown ? POS_TRAY : POS_HUD, 0, 1300);
         return 0;
     case WM_COMMAND: {
         int id = LOWORD(w);
         if (id == CMD_EXIT) do_exit();
         else if (id == CMD_AUTORUN) autorun_set(!autorun_enabled());
-        else if (id == CMD_RESTORE) restore_original();
-        else if (id == CMD_USE_HW) {
-            g_use_hw = !g_use_hw;
-            setting_set(L"UseHardware", g_use_hw);
-            restore_original();
-        }
-        else if (id == CMD_SHOW) show_panel(POS_TRAY, 1, 2500);
+        else if (id == CMD_RESTORE) restore_all();
+        else if (id >= CMD_USE_HW_BASE && id < CMD_USE_HW_BASE + g_nmon) {
+            int i = id - CMD_USE_HW_BASE;
+            Mon *mo = &g_mon[i];
+            wchar_t key[96];
+            mo->use_hw = !mo->use_hw;
+            use_hw_key(mo, key, 96);
+            setting_set(key, mo->use_hw);
+            restore_mon(i);
+            g_active = i;
+            update_tray_tip();
+            show_panel(POS_TRAY, 0, 1500);
+        } else if (id == CMD_SHOW) show_panel(POS_TRAY, 1, 2500);
         else if (id >= CMD_LEVEL_BASE && id <= CMD_LEVEL_BASE + 100) {
-            set_level(id - CMD_LEVEL_BASE);
+            set_all(id - CMD_LEVEL_BASE);
             show_panel(POS_TRAY, 0, 1300);
         }
         return 0;
@@ -1073,15 +1385,15 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         g_show_hint = (int)w;
         show_panel(POS_TRAY, 0, w ? 4000 : 2500);
         return 0;
-    case WM_APP_HWREADY: {
-        int initial = (int)w;
+    case WM_APP_HWREADY:
         g_hw_ready = 1;
-        g_hw_original = initial;
-        g_split = (initial >= 0 && g_use_hw) ? HW_SPLIT : 100.0; /* 쓸 수 없거나 끄면 전 구간 검은 막 */
-        if (initial >= 0 && g_use_hw && !g_touched) g_level = g_split + initial * (100.0 - g_split) / 100.0;
-        apply();
+        for (int i = 0; i < g_nmon; i++) {
+            Mon *mo = &g_mon[i];
+            mo->split = (mo->hw_original >= 0 && mo->use_hw) ? HW_SPLIT : 100.0; /* 쓸 수 없거나 끄면 전 구간 검은 막 */
+            if (!g_touched) mo->level = level_from_hw(mo);
+        }
+        apply_all();
         return 0;
-    }
     case WM_TIMER:
         if (w == TM_TOP) {
             raise_windows();
@@ -1089,8 +1401,11 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             fade_step();
         } else if (w == TM_IDLE) {
             /* 사용하지 않으면 자동으로 사라짐 (마우스가 패널 위에 있거나 드래그 중이면 유지) */
-            if (g_dragging || cursor_in_panel()) g_last_activity = GetTickCount();
+            if (g_drag_row >= 0 || cursor_in_panel()) g_last_activity = GetTickCount();
             else if (g_shown && GetTickCount() - g_last_activity > g_hide_delay) hide_panel();
+        } else if (w == TM_DISPLAY) {
+            KillTimer(h, TM_DISPLAY);
+            check_display_change();
         }
         return 0;
     case WM_SETTINGCHANGE:
@@ -1101,7 +1416,7 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         }
         return 0;
     case WM_DISPLAYCHANGE:
-        overlay_fit();
+        SetTimer(h, TM_DISPLAY, 1500, NULL); /* 연결/해제가 끝난 뒤 한 번만 확인 */
         return 0;
     case WM_DPICHANGED:
         g_dpi = HIWORD(w);
@@ -1155,6 +1470,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     (void)prev; (void)show;
     g_inst = inst;
     int background = cmd && wcsstr(cmd, L"--background") != NULL;
+    int replace = cmd && wcsstr(cmd, L"--replace") != NULL;
 
     /* 중복 실행 방지: 이미 실행 중이면 그 패널을 띄우고 종료 */
     g_msg_version = RegisterWindowMessageW(L"BrightnessControl_Version");
@@ -1165,27 +1481,27 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         DWORD_PTR ver = 0;
         if (other)
             SendMessageTimeoutW(other, g_msg_version, 0, 0, SMTO_ABORTIFHUNG, 2000, &ver);
-        if (other && ver >= APP_VERSION) {
+        if (other && ver >= APP_VERSION && !replace) {
             if (!background) {
                 AllowSetForegroundWindow(ASFW_ANY);
                 PostMessageW(other, WM_APP_SHOW, 0, 0);
             }
             return 0;
         }
-        /* 예전 버전이 실행 중: 종료시키고(예전 버전은 WM_CLOSE 로 종료) 끝날 때까지 기다림 */
+        /* 예전 버전(또는 --replace): 종료시키고(예전 버전은 WM_CLOSE 로 종료) 끝날 때까지 기다림 */
         if (other) {
             PostMessageW(other, g_msg_quit, 0, 0);
-            PostMessageW(other, WM_CLOSE, 0, 0);
+            if (ver < 4) PostMessageW(other, WM_CLOSE, 0, 0);
         }
         DWORD wr = WaitForSingleObject(mutex, 8000);
         if (wr != WAIT_OBJECT_0 && wr != WAIT_ABANDONED) return 0;
+        Sleep(300); /* 이전 인스턴스가 모니터 밝기를 되돌리는 시간 */
     }
 
     set_dpi_awareness();
     g_dpi = system_dpi();
     read_theme();
-    g_use_hw = setting_get(L"UseHardware", 1);
-    if (!g_use_hw) g_split = 100.0;
+    enumerate_monitors();
     InitializeCriticalSection(&g_hw_cs);
     InitializeConditionVariable(&g_hw_cv);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
@@ -1206,11 +1522,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     wc.lpszClassName = L"BrightnessControlMain";
     RegisterClassExW(&wc);
 
-    /* 클릭 통과 + 반투명 + 작업표시줄/Alt+Tab 제외 + 포커스 안 뺏음 */
-    g_overlay = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW |
-                                    WS_EX_NOACTIVATE | WS_EX_TOPMOST,
-                                L"BrightnessControlOverlay", L"", WS_POPUP, 0, 0, 1, 1, NULL, NULL, inst, NULL);
-    SetLayeredWindowAttributes(g_overlay, 0, 0, LWA_ALPHA);
+    /* 모니터별 검은 막: 클릭 통과 + 반투명 + 작업표시줄/Alt+Tab 제외 + 포커스 안 뺏음 */
+    for (int i = 0; i < g_nmon; i++) {
+        g_mon[i].overlay = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW |
+                                               WS_EX_NOACTIVATE | WS_EX_TOPMOST,
+                                           L"BrightnessControlOverlay", L"", WS_POPUP, 0, 0, 1, 1,
+                                           NULL, NULL, inst, NULL);
+        SetLayeredWindowAttributes(g_mon[i].overlay, 0, 0, LWA_ALPHA);
+    }
 
     /* 패널: 픽셀 단위 투명도(둥근 모서리 + 그림자) */
     g_main = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
@@ -1224,7 +1543,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     g_mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_hook, inst, 0);
     SetTimer(g_main, TM_TOP, 1000, NULL);
 
-    apply();
+    apply_all();
     if (!background) PostMessageW(g_main, WM_APP_SHOW, 1, 0); /* 첫 실행: 안내와 함께 잠깐 표시 */
 
     g_hw_thread = CreateThread(NULL, 0, hw_thread, NULL, 0, NULL);
@@ -1240,6 +1559,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         WaitForSingleObject(g_hw_thread, 4000);
         CloseHandle(g_hw_thread);
     }
-    DestroyWindow(g_overlay);
+    for (int i = 0; i < g_nmon; i++) DestroyWindow(g_mon[i].overlay);
     return 0;
 }
