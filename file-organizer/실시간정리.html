@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실시간 정리 추천</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --line:#d9dee3; --text:#1f2933; --sub:#5f6b7a; --accent:#1f6feb; --ok:#1a7f37; --warn:#b35c00; --err:#b42318; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif; font-size:14px; }
+  body.dragging::after { content:"여기에 놓으면 추천을 시작합니다"; position:fixed; inset:0; background:rgba(31,111,235,.12); border:4px dashed var(--accent); display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--accent); pointer-events:none; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:18px; }
+  header p { margin:4px 0 0; color:var(--sub); font-size:12px; }
+  #watch { font-size:12px; color:var(--sub); } #watch b { color:var(--ok); }
+  main { max-width:1000px; margin:0 auto; padding:16px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:14px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; }
+  button { font:inherit; padding:7px 14px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.sm { padding:4px 10px; font-size:12px; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .muted { color:var(--sub); font-size:12px; }
+  .hidden { display:none !important; }
+  .drop { border:2px dashed var(--line); border-radius:8px; padding:22px; text-align:center; color:var(--sub); margin-top:10px; }
+  .notice { padding:10px 12px; border-radius:6px; background:#fff7e6; border:1px solid #f0c36d; color:#6b4400; margin-top:10px; }
+  .notice.ok { background:#e9f7ee; border-color:#9fd3b0; color:#135c2b; } .notice.err { background:#fdecec; border-color:#f0a3a3; color:#7a1414; }
+  .card { border:1px solid var(--line); border-left:5px solid var(--accent); border-radius:6px; padding:10px 12px; margin-bottom:8px; display:grid; grid-template-columns:1fr auto; gap:6px 12px; align-items:start; }
+  .card.rename { border-left-color:#6f42c1; } .card.move { border-left-color:var(--accent); } .card.merge { border-left-color:var(--warn); }
+  .card .kind { font-size:11px; font-weight:600; color:#fff; background:var(--accent); border-radius:10px; padding:2px 8px; margin-right:6px; }
+  .card.rename .kind { background:#6f42c1; } .card.merge .kind { background:var(--warn); }
+  .card .new { font-size:11px; font-weight:600; color:#fff; background:var(--err); border-radius:10px; padding:2px 8px; margin-left:6px; }
+  .card .what { font-size:14px; word-break:break-all; } .card .what b { color:var(--ok); }
+  .card .why { color:var(--sub); font-size:12px; margin-top:3px; }
+  .card .btns { white-space:nowrap; display:flex; gap:6px; }
+  .card ul { margin:4px 0 0; padding-left:18px; font-size:12px; }
+  .filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .filters label { border:1px solid var(--line); border-radius:14px; padding:3px 10px; font-size:12px; cursor:pointer; }
+  #log { white-space:pre-wrap; font:12px/1.5 Consolas,monospace; background:#f8fafc; border:1px solid var(--line); border-radius:6px; padding:8px; max-height:220px; overflow:auto; margin-top:10px; }
+  footer { text-align:center; color:var(--sub); font-size:11px; padding:16px; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>실시간 정리 추천</h1><p>오프라인 단일 HTML · 고른 폴더만 몇 초마다 다시 읽어 추천 · 외부 통신 없음</p></div>
+  <div id="watch"></div>
+</header>
+<main>
+
+<section>
+  <h2>1. 폴더 고르기</h2>
+  <div class="row">
+    <button id="btnPick" class="primary">폴더 선택</button>
+    <label><input type="checkbox" id="optRecursive"> 하위 폴더까지 읽기 (이름 변경·합치기 추천은 전체, 이동 추천은 최상위 파일만)</label>
+  </div>
+  <div class="drop" id="drop">또는 탐색기에서 <b>폴더</b>를 이 창으로 끌어다 놓으세요. 파일만 끌어오면 추천은 보여 주지만 적용은 못 합니다.</div>
+  <div id="pickNotice" class="notice hidden"></div>
+</section>
+
+<section>
+  <h2>2. 추천 기준</h2>
+  <div class="row">
+    <span>이동 기준:</span>
+    <label><input type="radio" name="rule" value="ext" checked> 종류별</label>
+    <label><input type="radio" name="rule" value="month"> 월별</label>
+    <label><input type="radio" name="rule" value="ext-month"> 종류별 → 월별</label>
+    <label><input type="radio" name="rule" value="none"> 이동 추천 안 함</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label><input type="checkbox" id="optArchive" checked> <select id="optOldMonths"><option value="6">6개월</option><option value="12" selected>12개월</option><option value="24">24개월</option></select> 넘게 손대지 않은 파일은 "보관/연도"로 이동 추천</label>
+    <label><input type="checkbox" id="optDatePrefix"> 파일명 앞에 수정일 붙이기 (20261023_)</label>
+  </div>
+</section>
+
+<section id="recSection" class="hidden">
+  <h2>3. 추천 <span id="recCount" class="muted"></span></h2>
+  <div class="filters">
+    <label><input type="checkbox" class="flt" value="rename" checked> 이름 변경</label>
+    <label><input type="checkbox" class="flt" value="move" checked> 이동</label>
+    <label><input type="checkbox" class="flt" value="merge" checked> 합치기</label>
+  </div>
+  <div class="row" style="margin-bottom:10px">
+    <button id="btnApplyAll" class="primary">보이는 추천 모두 적용</button>
+    <button id="btnUndo" disabled>방금 적용한 것 되돌리기</button>
+    <button id="btnReset" class="sm">건너뛴 항목 다시 보기</button>
+    <span id="progress" class="muted"></span>
+  </div>
+  <div id="cards"></div>
+  <div id="runNotice" class="notice hidden"></div>
+  <div id="log" class="hidden"></div>
+</section>
+
+</main>
+<footer>실시간 정리 추천 · 네트워크 연결이 전혀 필요 없습니다.</footer>
+
+<script>
+'use strict';
+/* ---------- 공통 ---------- */
+const CATEGORIES = [
+  ['문서',   'doc docx docm xls xlsx xlsm ppt pptx pptm pdf hwp hwpx txt csv rtf odt ods odp md html htm xml json'],
+  ['이미지', 'jpg jpeg png gif bmp tif tiff webp svg heic'],
+  ['영상',   'mp4 avi mkv mov wmv flv webm mpg mpeg'],
+  ['음악',   'mp3 wav flac m4a wma ogg aac'],
+  ['압축',   'zip rar 7z tar gz egg alz'],
+  ['도면',   'dwg dxf'],
+  ['설치파일', 'exe msi bat cmd ps1 vbs jar'],
+].map(([k, v]) => [k, new Set(v.split(' '))]);
+const OTHER = '기타';
+const SPECIAL_DIRS = new Set(['보관', '이전버전', '중복', '참고자료', '진행중']);
+const SKIP_RE = /^(~\$|\.|thumbs\.db$|desktop\.ini$)|^실시간정리\.html$|^파일정리.*\.(html|bat)$|^정리어시스턴트\.html$/i;
+const VERSION_RE = /(최종|진짜|완료|수정본?|복사본|사본|copy|final|revised|백업|backup|구버전|\(\d+\)|[_\-\s]v\d+|[_\-\s]ver\s?\d+)/i;
+function $(id) { return document.getElementById(id); }
+function extOf(n) { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i + 1).toLowerCase() : ''; }
+function splitName(n) { const i = n.lastIndexOf('.'); return i > 0 ? [n.slice(0, i), n.slice(i)] : [n, '']; }
+function nthName(name, n) { const [b, e] = splitName(name); return n === 0 ? name : `${b} (${n})${e}`; }
+function categoryOf(ext) { for (const [k, s] of CATEGORIES) if (s.has(ext)) return k; return OTHER; }
+function pad2(n) { return String(n).padStart(2, '0'); }
+function ymOf(t) { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+function ymdOf(t) { const d = new Date(t); return '' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()); }
+function fmtSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'; if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB'; return (b / 1073741824).toFixed(2) + ' GB'; }
+function fmtDate(t) { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function pathOf(dir, name) { return (dir ? dir + '/' : '') + name; }
+function normName(s) { return s.toLowerCase().replace(/\(\d+\)|\s*-\s*복사본|\s*copy\s*\d*/g, '').replace(/[\s_\-.()\[\]]/g, ''); }
+function stripVersion(base) { return base.replace(/[\s_\-]*(최종|진짜|완료|수정본?|복사본|사본|copy|final|revised|백업|backup|구버전|\(\d+\)|v\d+|ver\s?\d+)[\s_\-]*/gi, ' ').replace(/[\s_\-]+/g, ' ').trim(); }
+function cleanName(name) {
+  let [b, e] = splitName(name);
+  b = b.replace(/(^|\D)(20\d{2})[._](\d{1,2})[._](\d{1,2})(?!\d)/g, (m, p, y, mo, d) => `${p}${y}-${pad2(mo)}-${pad2(d)}`);
+  b = b.replace(/(^|\D)(20\d{2})[._](\d{1,2})(?![\d.])/g, (m, p, y, mo) => `${p}${y}-${pad2(mo)}`);
+  b = b.replace(/\s*-\s*(복사본|copy)(\s*\(\d+\))?$/i, '').replace(/\s*\(\d+\)$/, '');
+  b = b.replace(/[ \t]+/g, ' ').replace(/^[\s_\-.]+|[\s_\-.]+$/g, '');
+  return (b || splitName(name)[0]) + e;
+}
+
+/* ---------- 상태 ---------- */
+const state = { root: null, rootName: '', files: [], recs: [], dismissed: new Set(), seen: new Set(), lastRun: [], logLines: [], busy: false, sig: '', timer: null, dropFiles: [] };
+const hasApi = typeof window.showDirectoryPicker === 'function';
+function notice(el, msg, kind) { el.textContent = msg; el.className = 'notice' + (kind ? ' ' + kind : ''); el.classList.toggle('hidden', !msg); }
+function log(line) { state.logLines.push(line); const el = $('log'); el.classList.remove('hidden'); el.textContent = state.logLines.join('\n'); el.scrollTop = el.scrollHeight; }
+function options() {
+  return { rule: document.querySelector('input[name=rule]:checked').value, recursive: $('optRecursive').checked, archive: $('optArchive').checked, oldMonths: +$('optOldMonths').value, datePrefix: $('optDatePrefix').checked };
+}
+
+/* ---------- 폴더 읽기 ---------- */
+async function scan(dirHandle, rel, recursive, out) {
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'file') {
+      if (SKIP_RE.test(name)) continue;
+      let f; try { f = await handle.getFile(); } catch (e) { continue; }
+      out.push({ name, ext: extOf(name), size: f.size, mtime: f.lastModified, dir: rel, handle, parent: dirHandle });
+    } else if (handle.kind === 'directory' && recursive) {
+      await scan(handle, rel ? rel + '/' + name : name, recursive, out);
+    }
+  }
+}
+async function setRoot(handle) {
+  state.root = handle; state.rootName = handle.name; state.dismissed = new Set(); state.seen = new Set(); state.lastRun = []; state.sig = '';
+  $('btnUndo').disabled = true;
+  notice($('pickNotice'), `"${handle.name}" 폴더를 감시합니다. 새 파일이 생기면 몇 초 안에 추천이 뜹니다.`, 'ok');
+  await refresh(true);
+  if (state.timer) clearInterval(state.timer);
+  state.timer = setInterval(() => refresh(false), 4000);
+}
+async function refresh(force) {
+  if (state.busy || !state.root) return;
+  state.busy = true;
+  try {
+    const o = options(), files = [];
+    await scan(state.root, '', o.recursive, files);
+    const sig = JSON.stringify([o, files.map(f => [f.dir, f.name, f.size, f.mtime])]);
+    if (force || sig !== state.sig) { state.sig = sig; state.files = files; buildRecs(); render(); }
+    const d = new Date();
+    $('watch').innerHTML = `<b>● 감시 중</b> ${esc(state.rootName)} · 파일 ${files.length}개 · 마지막 확인 ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  } catch (e) {
+    $('watch').textContent = '폴더를 읽지 못했습니다: ' + (e.name || e);
+  } finally { state.busy = false; }
+}
+$('btnPick').addEventListener('click', async () => {
+  try { await setRoot(await window.showDirectoryPicker({ mode: 'readwrite' })); }
+  catch (e) { if (e.name !== 'AbortError') notice($('pickNotice'), `폴더 접근이 거부되었습니다 (${e.name}). 사내 정책으로 막혀 있으면 "정리어시스턴트.html"(읽기 전용 진단)을 사용하세요.`, 'err'); }
+});
+document.querySelectorAll('input[name=rule], #optRecursive, #optArchive, #optOldMonths, #optDatePrefix').forEach(el => el.addEventListener('change', () => refresh(true)));
+if (!hasApi) { $('btnPick').disabled = true; notice($('pickNotice'), '이 브라우저는 폴더 직접 접근을 지원하지 않습니다. 엣지 또는 크롬에서 여세요.', 'err'); }
+
+/* 드래그 앤 드롭 */
+let dragDepth = 0;
+document.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+document.addEventListener('dragleave', e => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+document.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+document.addEventListener('drop', async e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+  const items = [...e.dataTransfer.items].filter(i => i.kind === 'file');
+  if (!items.length) return;
+  if (!items[0].getAsFileSystemHandle) { notice($('pickNotice'), '이 브라우저는 끌어다 놓기 접근을 지원하지 않습니다. "폴더 선택" 버튼을 쓰세요.', 'err'); return; }
+  const handles = await Promise.all(items.map(i => i.getAsFileSystemHandle()));
+  const dir = handles.find(h => h && h.kind === 'directory');
+  if (dir) {
+    let perm = 'prompt';
+    try { perm = await dir.requestPermission({ mode: 'readwrite' }); } catch (_) {}
+    if (perm !== 'granted') { notice($('pickNotice'), '쓰기 권한이 없어 추천만 보여 줍니다. "폴더 선택" 버튼으로 다시 고르면 적용할 수 있습니다.', ''); }
+    await setRoot(dir); return;
+  }
+  const dropped = [];
+  for (const h of handles.filter(h => h && h.kind === 'file')) { try { const f = await h.getFile(); dropped.push({ name: h.name, ext: extOf(h.name), size: f.size, mtime: f.lastModified, dir: '(끌어온 파일)', handle: h, parent: null }); } catch (_) {} }
+  state.dropFiles = dropped;
+  buildRecs(); render();
+  $('recSection').classList.remove('hidden');
+  notice($('pickNotice'), `끌어온 파일 ${dropped.length}개의 추천을 표시합니다. 적용하려면 그 파일이 들어 있는 폴더를 끌어다 놓거나 "폴더 선택"으로 고르세요.`, '');
+});
+
+/* ---------- 추천 만들기 ---------- */
+function buildRecs() {
+  const o = options();
+  const now = Date.now(), oldCut = now - o.oldMonths * 30.44 * 86400000;
+  const files = state.files;
+  const recs = [];
+  const taken = new Map();
+  const take = (dir, name) => { if (!taken.has(dir)) taken.set(dir, new Set()); taken.get(dir).add(name.toLowerCase()); };
+  const isTaken = (dir, name) => taken.has(dir) && taken.get(dir).has(name.toLowerCase());
+  for (const f of files) take(f.dir, f.name);
+  const consumed = new Set(); // files already covered by a merge rec
+  const key = f => pathOf(f.dir, f.name);
+
+  // 합치기 1: 중복 (이름+크기 동일, 다른 폴더)
+  const dupMap = new Map();
+  const inSpecial = f => SPECIAL_DIRS.has(f.dir.split('/')[0]);
+  for (const f of files) { if (f.size < 1024 || inSpecial(f)) continue; const k = f.name.toLowerCase() + '|' + f.size; if (!dupMap.has(k)) dupMap.set(k, []); dupMap.get(k).push(f); }
+  for (const g of dupMap.values()) {
+    if (g.length < 2) continue;
+    const keep = g.slice().sort((a, b) => (SPECIAL_DIRS.has(a.dir.split('/')[0]) ? 1 : 0) - (SPECIAL_DIRS.has(b.dir.split('/')[0]) ? 1 : 0) || a.dir.length - b.dir.length)[0];
+    const others = g.filter(f => f !== keep);
+    others.forEach(f => consumed.add(key(f))); consumed.add(key(keep));
+    recs.push({ id: 'dup|' + g.map(key).sort().join('|'), kind: 'merge', title: `같은 파일 ${g.length}개 → 하나만 남기기`, what: `<b>${esc(key(keep))}</b> 을(를) 남기고 나머지는 <b>중복/</b> 폴더로`, why: `이름과 크기(${fmtSize(keep.size)})가 완전히 같은 파일이 ${g.length}곳에 있습니다. 바로 지우지 않고 "중복" 폴더에 모아 두니 확인 후 지우세요.`,
+      items: others.map(key), ops: others.map(f => ({ file: f, dest: '중복', newName: f.name })) });
+  }
+
+  // 합치기 2: 버전 꼬리표 묶음 (같은 폴더)
+  const verMap = new Map();
+  for (const f of files) { if (consumed.has(key(f)) || inSpecial(f)) continue; const k = f.dir + '|' + stripVersion(splitName(f.name)[0]).toLowerCase() + '|' + f.ext; if (!verMap.has(k)) verMap.set(k, []); verMap.get(k).push(f); }
+  for (const g of verMap.values()) {
+    if (g.length < 2 || !g.some(f => VERSION_RE.test(splitName(f.name)[0]))) continue;
+    const sorted = g.slice().sort((a, b) => b.mtime - a.mtime);
+    const keep = sorted[0], others = sorted.slice(1);
+    g.forEach(f => consumed.add(key(f)));
+    const clean = stripVersion(splitName(keep.name)[0]) + splitName(keep.name)[1];
+    const ops = others.map(f => ({ file: f, dest: '이전버전', newName: f.name }));
+    let renameNote = '';
+    if (clean !== keep.name && (!isTaken(keep.dir, clean) || others.some(f => f.name.toLowerCase() === clean.toLowerCase()))) { ops.push({ file: keep, dest: keep.dir, newName: clean }); renameNote = ` 최신본은 <b>${esc(clean)}</b> 으로 이름 정리`; }
+    recs.push({ id: 'ver|' + g.map(key).sort().join('|'), kind: 'merge', title: `버전 ${g.length}개 → 최신본만 남기기`, what: `<b>${esc(keep.name)}</b> (${fmtDate(keep.mtime)}) 유지, 나머지 ${others.length}개는 <b>이전버전/</b> 폴더로.${renameNote}`,
+      why: `"최종", "사본", "(1)" 같은 꼬리표가 붙은 같은 문서의 여러 버전입니다. 가장 최근에 수정된 것을 최신본으로 봤습니다.`, items: others.map(f => `${f.name} (${fmtDate(f.mtime)})`), ops });
+  }
+
+  // 합치기 3: 이름이 거의 같은 형제 폴더
+  if (o.recursive) {
+    const dirsAll = new Map();
+    for (const f of files) { if (!f.dir) continue; const parts = f.dir.split('/'); for (let i = 1; i <= parts.length; i++) { const d = parts.slice(0, i).join('/'); if (!dirsAll.has(d)) dirsAll.set(d, 0); if (i === parts.length) dirsAll.set(d, dirsAll.get(d) + 1); } }
+    const sib = new Map();
+    for (const d of dirsAll.keys()) { const i = d.lastIndexOf('/'); const parent = i >= 0 ? d.slice(0, i) : '', leaf = i >= 0 ? d.slice(i + 1) : d; const k = parent + '|' + normName(leaf); if (!sib.has(k)) sib.set(k, []); sib.get(k).push(d); }
+    for (const g of sib.values()) {
+      if (g.length < 2) continue;
+      const keep = g.slice().sort((a, b) => dirsAll.get(b) - dirsAll.get(a) || a.length - b.length)[0];
+      const others = g.filter(d => d !== keep);
+      const ops = [];
+      for (const d of others) for (const f of files) if (f.dir === d && !consumed.has(key(f))) { ops.push({ file: f, dest: keep, newName: f.name }); consumed.add(key(f)); }
+      if (!ops.length) continue;
+      recs.push({ id: 'dir|' + g.sort().join('|'), kind: 'merge', title: `비슷한 이름의 폴더 ${g.length}개 → 하나로 합치기`, what: `<b>${esc(others.join(', '))}</b> 안의 파일 ${ops.length}개를 <b>${esc(keep)}/</b> 로 옮기고 빈 폴더는 삭제`, why: '띄어쓰기나 괄호 번호만 다른 폴더가 나란히 있어 같은 자료가 갈라져 있습니다.', items: ops.map(op => key(op.file)), ops, removeDirs: others });
+    }
+  }
+
+  // 파일별: 이름 변경 + 이동
+  const all = files.concat(state.dropFiles);
+  for (const f of all) {
+    if (consumed.has(key(f))) continue;
+    const dropped = f.parent === null;
+    let newName = cleanName(f.name);
+    const reasons = [];
+    if (newName !== f.name) reasons.push('이름 정리(날짜 형식·복사본 꼬리표·공백)');
+    if (o.datePrefix && !/^\d{8}_/.test(newName)) { newName = ymdOf(f.mtime) + '_' + newName; reasons.push('수정일 접두어'); }
+    let dest = f.dir;
+    const top = f.dir.split('/')[0];
+    if (!dropped && f.dir === '' && o.rule !== 'none') {
+      if (o.archive && f.mtime < oldCut) { dest = '보관/' + new Date(f.mtime).getFullYear(); reasons.push(`${o.oldMonths}개월 넘게 손대지 않음`); }
+      else { const parts = []; if (o.rule !== 'month') parts.push(categoryOf(f.ext)); if (o.rule !== 'ext') parts.push(ymOf(f.mtime)); dest = parts.join('/'); reasons.push('최상위에 흩어진 파일'); }
+    } else if (!dropped && o.archive && f.mtime < oldCut && !SPECIAL_DIRS.has(top) && o.rule !== 'none' && f.dir !== '') {
+      // 하위 폴더의 오래된 파일은 이동 추천하지 않음 (폴더 구조를 존중)
+    }
+    if (dropped && o.rule !== 'none') { const parts = []; if (o.rule !== 'month') parts.push(categoryOf(f.ext)); if (o.rule !== 'ext') parts.push(ymOf(f.mtime)); dest = parts.join('/'); }
+    if (newName === f.name && dest === f.dir) continue;
+    if (newName !== f.name && dest === f.dir && isTaken(f.dir, newName)) continue; // 같은 이름이 이미 있으면 이름 변경 추천 안 함
+    const kind = dest !== f.dir ? 'move' : 'rename';
+    const what = (dest !== f.dir ? `<b>${esc(dest || '(최상위)')}/</b> 로 이동` : '') + (newName !== f.name ? (dest !== f.dir ? ' + ' : '') + `이름을 <b>${esc(newName)}</b> 으로 변경` : '');
+    recs.push({ id: 'file|' + key(f) + '|' + dest + '|' + newName, kind, title: esc(key(f)) + (dropped ? ' (끌어온 파일)' : ''), what, why: reasons.join(', ') + (dropped ? ' · 적용하려면 상위 폴더를 고르세요' : ''), items: [], ops: dropped ? [] : [{ file: f, dest, newName }], dropped });
+  }
+  recs.sort((a, b) => ({ merge: 0, move: 1, rename: 2 }[a.kind] - { merge: 0, move: 1, rename: 2 }[b.kind]));
+  state.recs = recs;
+}
+
+/* ---------- 출력 ---------- */
+function visibleRecs() {
+  const on = new Set([...document.querySelectorAll('.flt:checked')].map(c => c.value));
+  return state.recs.filter(r => on.has(r.kind) && !state.dismissed.has(r.id));
+}
+function render() {
+  $('recSection').classList.remove('hidden');
+  const vis = visibleRecs();
+  const kindName = { rename: '이름 변경', move: '이동', merge: '합치기' };
+  $('recCount').textContent = `(${vis.length}건${state.dismissed.size ? `, 건너뜀 ${state.dismissed.size}건` : ''})`;
+  $('cards').innerHTML = vis.length ? vis.map(r => `<div class="card ${r.kind}" data-id="${esc(r.id)}"><div><div class="what"><span class="kind">${kindName[r.kind]}</span>${r.title}${state.seen.has(r.id) ? '' : '<span class="new">새로 감지</span>'}<br>${r.what}</div><div class="why">${esc(r.why)}</div>${r.items.length ? `<ul>${r.items.slice(0, 20).map(i => `<li>${esc(i)}</li>`).join('')}${r.items.length > 20 ? `<li>... 외 ${r.items.length - 20}개</li>` : ''}</ul>` : ''}</div><div class="btns"><button class="sm primary" data-act="apply" ${r.ops.length ? '' : 'disabled'}>적용</button><button class="sm" data-act="skip">건너뛰기</button></div></div>`).join('')
+    : '<p class="muted">추천할 것이 없습니다. 폴더가 잘 정리되어 있습니다. 새 파일이 들어오면 여기에 뜹니다.</p>';
+  $('btnApplyAll').disabled = !vis.some(r => r.ops.length);
+  setTimeout(() => vis.forEach(r => state.seen.add(r.id)), 0);
+}
+document.querySelectorAll('.flt').forEach(c => c.addEventListener('change', render));
+$('btnReset').addEventListener('click', () => { state.dismissed = new Set(); render(); });
+$('cards').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const id = btn.closest('.card').dataset.id; const rec = state.recs.find(r => r.id === id); if (!rec) return;
+  if (btn.dataset.act === 'skip') { state.dismissed.add(id); render(); return; }
+  await applyRecs([rec]);
+});
+$('btnApplyAll').addEventListener('click', async () => {
+  const recs = visibleRecs().filter(r => r.ops.length);
+  if (!recs.length) return;
+  if (!confirm(`추천 ${recs.length}건을 모두 적용합니다. 계속할까요?`)) return;
+  await applyRecs(recs);
+});
+
+/* ---------- 적용 ---------- */
+async function getDir(rel, create) { let h = state.root; for (const p of rel.split('/').filter(Boolean)) h = await h.getDirectoryHandle(p, { create }); return h; }
+async function freeName(dirHandle, wanted) {
+  for (let n = 0; n < 1000; n++) { const cand = nthName(wanted, n); try { await dirHandle.getFileHandle(cand); } catch (e) { if (e.name === 'NotFoundError') return cand; throw e; } }
+  throw new Error('빈 이름을 찾지 못했습니다: ' + wanted);
+}
+async function physMove(srcDir, name, dstDir, wanted) {
+  const same = await srcDir.isSameEntry(dstDir);
+  const finalName = (same && wanted === name) ? name : await freeName(dstDir, wanted);
+  if (same && finalName === name) return name;
+  const fh = await srcDir.getFileHandle(name);
+  if (typeof fh.move === 'function') { try { if (same) await fh.move(finalName); else await fh.move(dstDir, finalName); return finalName; } catch (e) { /* 복사 후 삭제 */ } }
+  const file = await fh.getFile();
+  const nh = await dstDir.getFileHandle(finalName, { create: true });
+  const w = await nh.createWritable();
+  try { await w.write(file); await w.close(); } catch (e) { try { await w.abort(); } catch (_) {} try { await dstDir.removeEntry(finalName); } catch (_) {} throw e; }
+  const check = await (await dstDir.getFileHandle(finalName)).getFile();
+  if (check.size !== file.size) { await dstDir.removeEntry(finalName); throw new Error('복사 검증 실패(크기 불일치)'); }
+  await srcDir.removeEntry(name);
+  return finalName;
+}
+async function applyRecs(recs) {
+  if (state.busy) { setTimeout(() => applyRecs(recs), 300); return; }
+  state.busy = true;
+  const run = []; let ok = 0, fail = 0;
+  log(`=== 적용 시작 ${new Date().toLocaleTimeString()} · ${recs.length}건 ===`);
+  try {
+    for (const rec of recs) {
+      let recOk = true;
+      for (const op of rec.ops) {
+        try {
+          const dstDir = await getDir(op.dest, true);
+          const finalName = await physMove(op.file.parent, op.file.name, dstDir, op.newName);
+          run.push({ fromDir: op.file.dir, fromName: op.file.name, toDir: op.dest, toName: finalName });
+          log(`[적용] ${pathOf(op.file.dir, op.file.name)}  →  ${pathOf(op.dest, finalName)}`); ok++;
+        } catch (e) { log(`[실패] ${op.file.name}: ${e.name || ''} ${e.message || e}`); fail++; recOk = false; }
+      }
+      for (const d of rec.removeDirs || []) { try { const i = d.lastIndexOf('/'); const parent = await getDir(i >= 0 ? d.slice(0, i) : '', false); await parent.removeEntry(d.slice(i + 1)); log(`[삭제] 빈 폴더 ${d}`); } catch (e) { log(`[유지] ${d} 폴더는 비어 있지 않아 남겨 둡니다`); } }
+      if (recOk) state.dismissed.add(rec.id);
+    }
+  } finally { state.busy = false; }
+  if (run.length) { state.lastRun = run; $('btnUndo').disabled = false; }
+  log(`=== 완료: 성공 ${ok}개, 실패 ${fail}개 ===`);
+  notice($('runNotice'), fail ? `${ok}개 적용, ${fail}개 실패. 아래 기록을 확인하세요.` : `${ok}개 파일을 처리했습니다.`, fail ? 'err' : 'ok');
+  state.sig = ''; await refresh(true);
+}
+$('btnUndo').addEventListener('click', async () => {
+  const run = state.lastRun.slice().reverse(); if (!run.length) return;
+  if (!confirm(`방금 처리한 ${run.length}개 파일을 원래 자리로 되돌립니다. 계속할까요?`)) return;
+  while (state.busy) await new Promise(r => setTimeout(r, 200));
+  state.busy = true; $('btnUndo').disabled = true;
+  let ok = 0, fail = 0;
+  log('=== 되돌리기 시작 ===');
+  try {
+    for (const r of run) {
+      try { const src = await getDir(r.toDir, false), dst = await getDir(r.fromDir, true); const name = await physMove(src, r.toName, dst, r.fromName); log(`[복구] ${pathOf(r.toDir, r.toName)}  →  ${pathOf(r.fromDir, name)}`); ok++; }
+      catch (e) { log(`[실패] ${r.toName}: ${e.name || ''} ${e.message || e}`); fail++; }
+    }
+  } finally { state.busy = false; }
+  log(`=== 되돌리기 완료: 성공 ${ok}개, 실패 ${fail}개 ===`);
+  notice($('runNotice'), fail ? `${ok}개 복구, ${fail}개 실패.` : `${ok}개 파일을 원래 자리로 되돌렸습니다.`, fail ? 'err' : 'ok');
+  state.lastRun = []; state.dismissed = new Set(); state.sig = ''; await refresh(true);
+});
+</script>
+</body>
+</html>
