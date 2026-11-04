@@ -10,6 +10,9 @@
  *   1~20%  : 백라이트 최저 + 그 모니터에 클릭이 통과하는 검은 막(오버레이)
  *     0%   : 완전 검정 (꺼진 것처럼 보임)
  *
+ *  밝기 예약: 패널의 시계 버튼 -> 시각·밝기를 휠로 설정 (예: 07:00 에 100%)
+ *           절전 중에 지나간 예약은 깨어날 때 가장 최근 것을 적용
+ *
  *  실행 인자 --background : 패널을 띄우지 않고 조용히 시작 (자동 실행용)
  *           --replace    : 실행 중인 인스턴스를 종료시키고 대신 실행 (모니터 구성 변경 시 재시작용)
  */
@@ -29,7 +32,7 @@
 #include "resource.h"
 
 #define APP_NAME L"밝기조절"
-#define APP_VERSION 5   /* 실행 중인 예전 버전을 교체할 때 비교 */
+#define APP_VERSION 6   /* 실행 중인 예전 버전을 교체할 때 비교 */
 #define STEP 2.0
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE L"BrightnessControl"
@@ -44,7 +47,7 @@
 #define WM_APP_SHOW    (WM_APP + 4)
 
 enum { HK_UP = 1, HK_DOWN, HK_RESET };
-enum { TM_TOP = 1, TM_FADE, TM_IDLE, TM_DISPLAY };
+enum { TM_TOP = 1, TM_FADE, TM_IDLE, TM_DISPLAY, TM_SCHED, TM_RESUME, TM_DISPLAY_ON };
 enum { CMD_EXIT = 100, CMD_AUTORUN, CMD_SHOW, CMD_RESTORE, CMD_USE_HW_BASE = 150, CMD_LEVEL_BASE = 200 };
 enum { WHEEL_FROM_PANEL = 0, WHEEL_FROM_TRAY = 1 };
 enum { POS_TRAY, POS_HUD };
@@ -68,6 +71,7 @@ typedef struct {
     int nphys;
     int wmi;             /* 노트북 내장 화면 (WMI 로 조절) */
     int target;          /* 요청값 (-1 = 없음), g_hw_cs 로 보호 */
+    int force;           /* 같은 값이어도 다시 보냄 (화면이 다시 켜졌을 때), g_hw_cs 로 보호 */
     int last;
 } Mon;
 
@@ -98,6 +102,17 @@ static int g_show_hint = 0;      /* 첫 실행 안내 문구 */
 static int g_dark = 1;           /* 패널 다크 모드 */
 static int g_taskbar_dark = 1;
 static int g_close_hover = 0;    /* 닫기(✕) 버튼 위에 커서 */
+
+/* 밝기 예약 */
+#define MAX_SCHED 6
+typedef struct { int h, m, level, on; int fired_day; } Sched;
+static Sched g_sched[MAX_SCHED];
+static int g_nsched;
+static int g_view = 0;           /* 0 = 밝기, 1 = 예약 */
+static int g_hover_field = -1;   /* 휠/클릭할 수 있는 항목 위에 커서 (강조 표시) */
+static wchar_t g_notice[96];     /* 잠깐 보여줄 캡션 (예약 실행 알림) */
+static DWORD g_notice_until;
+static ULONGLONG g_suspend_min;  /* 절전에 들어간 시각 (분 단위, 0 = 없음) */
 static UINT g_msg_version, g_msg_quit;
 static DWORD g_deact_tick;       /* 바깥 클릭으로 닫힌 시각 (트레이 재클릭 토글 처리용) */
 
@@ -113,7 +128,15 @@ static DWORD g_deact_tick;       /* 바깥 클릭으로 닫힌 시각 (트레이
 #define LABEL_H 18
 #define TRACK_DY 22
 #define TRACK_H 26
-#define PH (ROWS_Y + ROW_H * (g_nmon > 0 ? g_nmon : 1) + 28)   /* 패널 높이 (캡션 포함) */
+#define SCHED_Y 48  /* 예약 화면: 첫 줄 시작 */
+#define SCHED_H 46  /* 예약 한 줄 */
+#define PH panel_h() /* 패널 높이 (캡션 포함) */
+
+static int panel_h(void)
+{
+    if (g_view == 1) return SCHED_Y + SCHED_H * g_nsched + (g_nsched < MAX_SCHED ? 40 : 0) + 34;
+    return ROWS_Y + ROW_H * (g_nmon > 0 ? g_nmon : 1) + 28;
+}
 
 /* ---------------------------------------------------------------- 밝기 곡선 */
 /* 0..split 구간 -> 오버레이 투과량(0~255). 어두운 쪽을 촘촘하게 (감마 2.2). */
@@ -250,12 +273,14 @@ static void enumerate_monitors(void)
 }
 
 /* ---------------------------------------------------------------- 하드웨어: DDC/CI */
-static void ddc_set(Mon *m, int pct)
+static int ddc_set(Mon *m, int pct)
 {
+    int ok = 1;
     for (int i = 0; i < m->nphys; i++) {
         DWORD v = m->mn[i] + (DWORD)lround((m->mx[i] - m->mn[i]) * pct / 100.0);
-        SetMonitorBrightness(m->phys[i], v);
+        if (!SetMonitorBrightness(m->phys[i], v)) ok = 0;
     }
+    return ok;
 }
 
 static int ddc_open(Mon *m)
@@ -427,28 +452,52 @@ static DWORD WINAPI hw_thread(LPVOID p)
     LeaveCriticalSection(&g_hw_cs);
     PostMessageW(g_main, WM_APP_HWREADY, 0, 0);
 
+    /* 모니터가 대기(절전) 상태면 DDC 가 실패한다: 5초 간격으로 최대 2분간 다시 시도 */
+    int retry[MAX_MON], tries[MAX_MON];
+    for (int i = 0; i < MAX_MON; i++) retry[i] = -1, tries[i] = 0;
     for (;;) {
-        int t[MAX_MON], any = 0;
+        int t[MAX_MON], f[MAX_MON], any = 0;
         EnterCriticalSection(&g_hw_cs);
         for (;;) {
+            int pending = 0;
             any = 0;
-            for (int i = 0; i < g_nmon; i++) if (g_mon[i].target >= 0) any = 1;
+            for (int i = 0; i < g_nmon; i++) {
+                if (g_mon[i].target >= 0) any = 1;
+                if (retry[i] >= 0) pending = 1;
+            }
             if (any || g_hw_stop) break;
-            SleepConditionVariableCS(&g_hw_cv, &g_hw_cs, INFINITE);
+            if (pending) {
+                if (!SleepConditionVariableCS(&g_hw_cv, &g_hw_cs, 5000)) break; /* 시간 초과 -> 재시도 */
+            } else {
+                SleepConditionVariableCS(&g_hw_cv, &g_hw_cs, INFINITE);
+            }
         }
         for (int i = 0; i < g_nmon; i++) {
-            t[i] = g_mon[i].target;
+            if (g_mon[i].target >= 0) {
+                t[i] = g_mon[i].target;
+                tries[i] = 0;
+            } else {
+                t[i] = retry[i];
+            }
+            f[i] = g_mon[i].force || retry[i] >= 0;
             g_mon[i].target = -1;
+            g_mon[i].force = 0;
+            retry[i] = -1;
         }
         int stopping = g_hw_stop;
         LeaveCriticalSection(&g_hw_cs);
 
         for (int i = 0; i < g_nmon; i++) {
             Mon *m = &g_mon[i];
-            if (t[i] < 0 || t[i] == m->last) continue;
-            if (m->nphys) ddc_set(m, t[i]);
+            if (t[i] < 0 || (t[i] == m->last && !f[i])) continue;
+            int ok = 1;
+            if (m->nphys) ok = ddc_set(m, t[i]);
             if (m->wmi) wmi_set(t[i]);
-            m->last = t[i];
+            if (ok) {
+                m->last = t[i];
+            } else if (!stopping && ++tries[i] <= 24) {
+                retry[i] = t[i];
+            }
         }
         if (stopping) break;
     }
@@ -694,6 +743,68 @@ static int in_close(int x, int y)
     return dx * dx + dy * dy <= hit * hit;
 }
 
+/* 시계(예약) 버튼: 닫기 버튼 왼쪽 */
+static void clock_geom(double *cx, double *cy, double *r)
+{
+    close_geom(cx, cy, r);
+    *cx -= S(30);
+}
+
+static int in_clock(int x, int y)
+{
+    double cx, cy, r;
+    clock_geom(&cx, &cy, &r);
+    double dx = x - cx, dy = y - cy, hit = r + S(4);
+    return dx * dx + dy * dy <= hit * hit;
+}
+
+/* 예약 화면 항목: 줄 항목은 row * 8 + 종류 */
+enum { F_BACK = 100, F_ADD, F_CLOCK };
+enum { K_HOUR = 1, K_MIN, K_LEVEL, K_TOGGLE, K_DEL };
+
+static RECT field_rect(int f) /* 클라이언트 좌표 */
+{
+    RECT p = panel_rect_client(), r = {0, 0, 0, 0};
+    if (f == F_BACK) {
+        SetRect(&r, p.left + S(8), p.top + S(8), p.left + S(150), p.top + S(40));
+        return r;
+    }
+    if (f == F_ADD) {
+        int t = p.top + S(SCHED_Y + SCHED_H * g_nsched);
+        SetRect(&r, p.left + S(12), t, p.right - S(12), t + S(34));
+        return r;
+    }
+    int t = p.top + S(SCHED_Y + SCHED_H * (f / 8)), b = t + S(40), x = p.left;
+    switch (f % 8) {
+    case K_HOUR: SetRect(&r, x + S(20), t + S(4), x + S(52), b - S(4)); break;
+    case K_MIN: SetRect(&r, x + S(60), t + S(4), x + S(92), b - S(4)); break;
+    case K_LEVEL: SetRect(&r, x + S(116), t + S(4), x + S(178), b - S(4)); break;
+    case K_TOGGLE: SetRect(&r, x + S(204), t + S(9), x + S(242), b - S(9)); break;
+    case K_DEL: SetRect(&r, x + S(254), t + S(9), x + S(276), b - S(9)); break;
+    }
+    return r;
+}
+
+static int field_at(int x, int y)
+{
+    POINT pt = {x, y};
+    RECT r;
+    if (g_view != 1) return in_clock(x, y) ? F_CLOCK : -1;
+    r = field_rect(F_BACK);
+    if (PtInRect(&r, pt)) return F_BACK;
+    for (int i = 0; i < g_nsched; i++)
+        for (int k = K_HOUR; k <= K_DEL; k++) {
+            r = field_rect(i * 8 + k);
+            InflateRect(&r, S(3), S(3));
+            if (PtInRect(&r, pt)) return i * 8 + k;
+        }
+    if (g_nsched < MAX_SCHED) {
+        r = field_rect(F_ADD);
+        if (PtInRect(&r, pt)) return F_ADD;
+    }
+    return -1;
+}
+
 static int row_top(int i) { return panel_rect_client().top + S(ROWS_Y + ROW_H * i); }
 
 static void track_geom(int i, double *x0, double *y0, double *x1, double *y1)
@@ -728,6 +839,16 @@ static void mode_text(wchar_t *buf, size_t n)
     const Mon *m = &g_mon[g_active < g_nmon ? g_active : 0];
     int hw = hw_percent(m);
     wchar_t t[96];
+    if (g_notice[0] && GetTickCount() < g_notice_until) {
+        wcsncpy(buf, g_notice, n);
+        buf[n - 1] = 0;
+        return;
+    }
+    if (g_view == 1) {
+        wcsncpy(buf, g_nsched ? L"시각·밝기 위에서 휠을 굴리거나 클릭해서 바꾸세요" : L"예약을 추가하면 정한 시각에 밝기가 바뀝니다", n);
+        buf[n - 1] = 0;
+        return;
+    }
     if (g_show_hint)
         wcsncpy(t, L"아이콘 클릭 또는 아이콘 위에서 휠로 조절", 96);
     else if (!g_hw_ready)
@@ -748,6 +869,51 @@ static void mode_text(wchar_t *buf, size_t n)
     else
         wcsncpy(buf, t, n);
     buf[n - 1] = 0;
+}
+
+/* 원 안의 X (닫기·삭제 버튼) */
+static void draw_x(Canvas *c, double cx, double cy, double r, double lw, Rgba col)
+{
+    double k = r * 0.36;
+    for (int y = (int)(cy - r); y < (int)(cy + r) + 1; y++)
+        for (int x = (int)(cx - r); x < (int)(cx + r) + 1; x++) {
+            if (x < 0 || y < 0 || x >= c->w || y >= c->h) continue;
+            double px = x + 0.5, py = y + 0.5;
+            double d1 = sdf_capsule(px, py, cx - k, cy - k, cx + k, cy + k, lw);
+            double d2 = sdf_capsule(px, py, cx + k, cy - k, cx - k, cy + k, lw);
+            double cv = cov_of(d1 < d2 ? d1 : d2);
+            if (cv > 0) blend_px(&c->px[y * c->w + x], col, cv);
+        }
+}
+
+/* 시계 아이콘 (SF Symbols 'clock' 느낌) */
+static void draw_clock(Canvas *c, double cx, double cy, double r, double lw, Rgba col)
+{
+    for (int y = (int)(cy - r) - 1; y < (int)(cy + r) + 2; y++)
+        for (int x = (int)(cx - r) - 1; x < (int)(cx + r) + 2; x++) {
+            if (x < 0 || y < 0 || x >= c->w || y >= c->h) continue;
+            double px = x + 0.5, py = y + 0.5;
+            double d = fabs(sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy)) - (r - lw)) - lw;
+            double h1 = sdf_capsule(px, py, cx, cy, cx, cy - r * 0.55, lw * 0.9);
+            double h2 = sdf_capsule(px, py, cx, cy, cx + r * 0.42, cy, lw * 0.9);
+            if (h1 < d) d = h1;
+            if (h2 < d) d = h2;
+            double cv = cov_of(d);
+            if (cv > 0) blend_px(&c->px[y * c->w + x], col, cv);
+        }
+}
+
+/* iOS 스타일 켜기/끄기 스위치 */
+static void draw_toggle(Canvas *c, RECT r, int on, Rgba off_col)
+{
+    double h = r.bottom - r.top, rad = h / 2;
+    Rgba green = {0.204, 0.780, 0.349, 1};
+    fill_rrect(c, r.left, r.top, r.right, r.bottom, rad, on ? green : off_col);
+    double kr = rad - S(2) * 0.9;
+    double kx = on ? r.right - rad : r.left + rad;
+    Rgba sh = {0, 0, 0, 0.18}, white = {1, 1, 1, 1};
+    fill_rrect(c, kx - kr, r.top + rad - kr + 1, kx + kr, r.top + rad + kr + 1, kr, sh);
+    fill_rrect(c, kx - kr, r.top + rad - kr, kx + kr, r.top + rad + kr, kr, white);
 }
 
 static void render_panel(void)
@@ -788,7 +954,24 @@ static void render_panel(void)
     HFONT f_caption = make_font(L"Malgun Gothic", 12, FW_NORMAL);
 
     RECT rt = {p.left + S(PAD), p.top + S(12), p.right - S(60), p.top + S(36)};
-    draw_text(&g_cv, L"디스플레이", rt, f_title, DT_LEFT | DT_VCENTER, primary);
+    if (g_view == 1) {
+        RECT rb = field_rect(F_BACK);
+        if (g_hover_field == F_BACK) fill_rrect(&g_cv, rb.left, rb.top, rb.right, rb.bottom, S(8), track);
+        draw_text(&g_cv, L"‹  밝기 예약", rt, f_title, DT_LEFT | DT_VCENTER, primary);
+    } else {
+        draw_text(&g_cv, L"디스플레이", rt, f_title, DT_LEFT | DT_VCENTER, primary);
+        /* 시계(예약) 버튼: 켜진 예약이 있으면 강조색 */
+        double kx, ky, kr;
+        clock_geom(&kx, &ky, &kr);
+        Rgba kbg = track;
+        if (g_hover_field == F_CLOCK) kbg.a *= 2.0;
+        fill_rrect(&g_cv, kx - kr, ky - kr, kx + kr, ky + kr, kr, kbg);
+        int any_on = 0;
+        for (int i = 0; i < g_nsched; i++) any_on |= g_sched[i].on;
+        Rgba accent = g_dark ? (Rgba){0.039, 0.518, 1, 1} : (Rgba){0, 0.478, 1, 1};
+        draw_clock(&g_cv, kx, ky, kr * 0.62, S(1) * 0.75,
+                   any_on ? accent : (g_hover_field == F_CLOCK ? primary : secondary));
+    }
 
     /* 닫기 버튼 */
     double ccx, ccy, ccr;
@@ -796,21 +979,56 @@ static void render_panel(void)
     Rgba cbg = track;
     if (g_close_hover) cbg.a *= 2.0;
     fill_rrect(&g_cv, ccx - ccr, ccy - ccr, ccx + ccr, ccy + ccr, ccr, cbg);
-    {
-        double k = ccr * 0.36, lw = S(1) * 0.8;
-        Rgba xc = g_close_hover ? primary : secondary;
-        int x0 = (int)(ccx - ccr), x1 = (int)(ccx + ccr) + 1, y0 = (int)(ccy - ccr), y1 = (int)(ccy + ccr) + 1;
-        for (int y = y0; y < y1; y++)
-            for (int x = x0; x < x1; x++) {
-                double px = x + 0.5, py = y + 0.5;
-                double d1 = sdf_capsule(px, py, ccx - k, ccy - k, ccx + k, ccy + k, lw);
-                double d2 = sdf_capsule(px, py, ccx + k, ccy - k, ccx - k, ccy + k, lw);
-                double cv = cov_of(d1 < d2 ? d1 : d2);
-                if (cv > 0) blend_px(&g_cv.px[y * g_cv.w + x], xc, cv);
+    draw_x(&g_cv, ccx, ccy, ccr, S(1) * 0.8, g_close_hover ? primary : secondary);
+
+    /* 예약 화면: 줄마다 [시:분] [밝기] [스위치] [삭제] */
+    if (g_view == 1) {
+        HFONT f_time = make_font(L"Segoe UI Semibold", 21, FW_SEMIBOLD);
+        HFONT f_lv = make_font(L"Segoe UI Semibold", 16, FW_SEMIBOLD);
+        Rgba card = g_dark ? (Rgba){1, 1, 1, 0.05} : (Rgba){0, 0, 0, 0.035};
+        Rgba hover = track;
+        hover.a *= 1.4;
+        for (int i = 0; i < g_nsched; i++) {
+            Sched *sc = &g_sched[i];
+            int t = p.top + S(SCHED_Y + SCHED_H * i);
+            fill_rrect(&g_cv, p.left + S(12), t, p.right - S(12), t + S(40), S(10), card);
+            Rgba tc = sc->on ? primary : secondary;
+            wchar_t num[16];
+            for (int k = K_HOUR; k <= K_LEVEL; k++) {
+                RECT fr = field_rect(i * 8 + k);
+                if (g_hover_field == i * 8 + k) fill_rrect(&g_cv, fr.left, fr.top, fr.right, fr.bottom, S(6), hover);
+                if (k == K_HOUR) swprintf(num, 16, L"%02d", sc->h);
+                else if (k == K_MIN) swprintf(num, 16, L"%02d", sc->m);
+                else swprintf(num, 16, L"%d%%", sc->level);
+                draw_text(&g_cv, num, fr, k == K_LEVEL ? f_lv : f_time, DT_CENTER | DT_VCENTER, tc);
             }
+            RECT colon = field_rect(i * 8 + K_HOUR);
+            colon.left = colon.right;
+            colon.right = field_rect(i * 8 + K_MIN).left;
+            colon.top -= S(2);
+            draw_text(&g_cv, L":", colon, f_time, DT_CENTER | DT_VCENTER, tc);
+            RECT sun = field_rect(i * 8 + K_LEVEL);
+            draw_sun(&g_cv, sun.left - S(9), (sun.top + sun.bottom) / 2.0, S(13), secondary);
+            draw_toggle(&g_cv, field_rect(i * 8 + K_TOGGLE), sc->on, track);
+            RECT dr = field_rect(i * 8 + K_DEL);
+            double dcx = (dr.left + dr.right) / 2.0, dcy = (dr.top + dr.bottom) / 2.0, drr = S(10);
+            Rgba dbg = track;
+            if (g_hover_field == i * 8 + K_DEL) dbg.a *= 2.0;
+            fill_rrect(&g_cv, dcx - drr, dcy - drr, dcx + drr, dcy + drr, drr, dbg);
+            draw_x(&g_cv, dcx, dcy, drr, S(1) * 0.7, g_hover_field == i * 8 + K_DEL ? primary : secondary);
+        }
+        if (g_nsched < MAX_SCHED) {
+            RECT ar = field_rect(F_ADD);
+            Rgba accent = g_dark ? (Rgba){0.039, 0.518, 1, 1} : (Rgba){0, 0.478, 1, 1};
+            if (g_hover_field == F_ADD) fill_rrect(&g_cv, ar.left, ar.top, ar.right, ar.bottom, S(10), card);
+            draw_text(&g_cv, L"+  예약 추가", ar, f_name, DT_CENTER | DT_VCENTER, accent);
+        }
+        DeleteObject(f_time);
+        DeleteObject(f_lv);
     }
 
     /* 모니터별 줄: 이름 + 값 + 캡슐 슬라이더 (채움은 최소 트랙 높이(원)부터 — macOS 제어 센터와 동일) */
+    if (g_view == 0)
     for (int i = 0; i < g_nmon; i++) {
         Mon *m = &g_mon[i];
         int top = row_top(i);
@@ -833,7 +1051,7 @@ static void render_panel(void)
 
     wchar_t mode[160];
     mode_text(mode, 160);
-    int cy = row_top(g_nmon) - S(6);
+    int cy = g_view == 1 ? p.bottom - S(32) : row_top(g_nmon) - S(6);
     RECT rm = {p.left + S(PAD), cy, p.right - S(PAD), cy + S(20)};
     draw_text(&g_cv, mode, rm, f_caption, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, secondary);
 
@@ -961,6 +1179,8 @@ static void fade_step(void)
             ShowWindow(g_main, SW_HIDE);
             KillTimer(g_main, TM_IDLE);
             g_show_hint = 0;
+            g_view = 0;
+            g_hover_field = -1;
         }
     }
 }
@@ -1146,6 +1366,201 @@ static void restore_all(void)
     show_panel(POS_TRAY, 0, 1500);
 }
 
+/* ---------------------------------------------------------------- 밝기 예약 */
+/* 저장 형식 (HKCU\Software\BrightnessControl\Schedules): "07:00=100:1;23:00=20:1;" (시:분=밝기:켜짐) */
+static void sched_save(void)
+{
+    wchar_t buf[256] = L"", one[32];
+    for (int i = 0; i < g_nsched; i++) {
+        swprintf(one, 32, L"%02d:%02d=%d:%d;", g_sched[i].h, g_sched[i].m, g_sched[i].level, g_sched[i].on);
+        wcscat(buf, one);
+    }
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, SETTINGS_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL) != ERROR_SUCCESS)
+        return;
+    RegSetValueExW(k, L"Schedules", 0, REG_SZ, (const BYTE *)buf, (DWORD)((wcslen(buf) + 1) * sizeof(wchar_t)));
+    RegCloseKey(k);
+}
+
+static void sched_load(void)
+{
+    wchar_t buf[256];
+    DWORD sz = sizeof(buf);
+    g_nsched = 0;
+    if (RegGetValueW(HKEY_CURRENT_USER, SETTINGS_KEY, L"Schedules", RRF_RT_REG_SZ, NULL, buf, &sz) != ERROR_SUCCESS)
+        return;
+    for (wchar_t *q = buf; *q && g_nsched < MAX_SCHED;) {
+        int h, m, lv, on;
+        if (swscanf(q, L"%d:%d=%d:%d", &h, &m, &lv, &on) == 4 && h >= 0 && h < 24 && m >= 0 && m < 60 &&
+            lv >= 0 && lv <= 100) {
+            Sched *sc = &g_sched[g_nsched++];
+            sc->h = h;
+            sc->m = m;
+            sc->level = lv;
+            sc->on = on != 0;
+            sc->fired_day = 0;
+        }
+        wchar_t *semi = wcschr(q, L';');
+        if (!semi) break;
+        q = semi + 1;
+    }
+}
+
+static int today_key(void)
+{
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    return t.wYear * 10000 + t.wMonth * 100 + t.wDay;
+}
+
+/* 현지 시각을 분 단위로 (오늘 날짜 + day_offset 일, h:m). h < 0 이면 지금 */
+static ULONGLONG local_minutes(int day_offset, int h, int m)
+{
+    SYSTEMTIME t;
+    FILETIME f;
+    GetLocalTime(&t);
+    if (h >= 0) {
+        t.wHour = (WORD)h;
+        t.wMinute = (WORD)m;
+        t.wSecond = 0;
+        t.wMilliseconds = 0;
+    }
+    SystemTimeToFileTime(&t, &f);
+    ULARGE_INTEGER u;
+    u.LowPart = f.dwLowDateTime;
+    u.HighPart = f.dwHighDateTime;
+    return u.QuadPart / 600000000ULL + (LONGLONG)day_offset * 1440;
+}
+
+static void sched_fire(int i)
+{
+    Sched *sc = &g_sched[i];
+    set_all(sc->level);
+    swprintf(g_notice, 96, L"예약 %02d:%02d · 밝기 %d%% 로 바꿨어요", sc->h, sc->m, sc->level);
+    g_notice_until = GetTickCount() + 3500;
+    if (!g_shown) show_panel(POS_HUD, 0, 3000);
+    else redraw();
+}
+
+static void sched_tick(void)
+{
+    if (g_shown && g_view == 1) return; /* 편집 중에는 실행하지 않음 (휠로 시각을 넘길 때 바로 실행되지 않게) */
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    int day = today_key();
+    for (int i = 0; i < g_nsched; i++) {
+        Sched *sc = &g_sched[i];
+        if (sc->on && sc->h == t.wHour && sc->m == t.wMinute && sc->fired_day != day) {
+            sc->fired_day = day;
+            sched_fire(i);
+        }
+    }
+}
+
+/* 절전 중에 지나간 예약이 있으면 가장 최근 것을 적용 */
+static void sched_catch_up(void)
+{
+    if (!g_suspend_min) return;
+    ULONGLONG now = local_minutes(0, -1, 0), best_t = 0;
+    int best = -1, best_today = 0;
+    for (int i = 0; i < g_nsched; i++) {
+        if (!g_sched[i].on) continue;
+        for (int off = -1; off <= 0; off++) {
+            ULONGLONG o = local_minutes(off, g_sched[i].h, g_sched[i].m);
+            if (o > g_suspend_min && o <= now && o >= best_t) {
+                best = i;
+                best_t = o;
+                best_today = off == 0;
+            }
+        }
+    }
+    g_suspend_min = 0;
+    if (best >= 0) {
+        if (best_today) g_sched[best].fired_day = today_key();
+        sched_fire(best);
+    }
+}
+
+/* 화면 전환 (밝기 <-> 예약): 패널 아래쪽 기준으로 크기만 바꿈 */
+static void relayout(void)
+{
+    RECT wr;
+    GetWindowRect(g_main, &wr);
+    int H = S(PH + 2 * PM);
+    SetWindowPos(g_main, HWND_TOPMOST, wr.left, wr.bottom - H, S(PW + 2 * PM), H, SWP_NOACTIVATE);
+    redraw();
+}
+
+static void set_view(int v)
+{
+    g_view = v;
+    g_hover_field = -1;
+    g_hide_delay = v ? 10000 : 2500;
+    g_last_activity = GetTickCount();
+    relayout();
+}
+
+static void sched_add(void)
+{
+    if (g_nsched >= MAX_SCHED) return;
+    static const int defs[][2] = {{7, 100}, {23, 20}, {12, 100}, {18, 70}, {21, 40}, {9, 100}};
+    Sched *sc = &g_sched[g_nsched];
+    sc->h = defs[g_nsched][0];
+    sc->m = 0;
+    sc->level = defs[g_nsched][1];
+    sc->on = 1;
+    sc->fired_day = 0;
+    g_nsched++;
+    sched_save();
+    relayout();
+}
+
+static void sched_delete(int i)
+{
+    for (int k = i; k + 1 < g_nsched; k++) g_sched[k] = g_sched[k + 1];
+    g_nsched--;
+    g_hover_field = -1;
+    sched_save();
+    relayout();
+}
+
+/* 시/분/밝기 값을 바꿈: d 칸, fine = Shift (분·밝기를 1 단위로) */
+static void sched_adjust(int f, int d, int fine)
+{
+    int i = f / 8, k = f % 8;
+    if (i < 0 || i >= g_nsched) return;
+    Sched *sc = &g_sched[i];
+    if (k == K_HOUR) sc->h = ((sc->h + d) % 24 + 24) % 24;
+    else if (k == K_MIN) sc->m = ((sc->m + d * (fine ? 1 : 5)) % 60 + 60) % 60;
+    else if (k == K_LEVEL) {
+        sc->level += d * (fine ? 1 : 5);
+        sc->level = sc->level < 0 ? 0 : (sc->level > 100 ? 100 : sc->level);
+    } else return;
+    sc->fired_day = 0;
+    sched_save();
+    redraw();
+}
+
+static void field_click(int f)
+{
+    if (f == F_CLOCK) set_view(1);
+    else if (f == F_BACK) set_view(0);
+    else if (f == F_ADD) sched_add();
+    else if (f >= 0 && f < 8 * MAX_SCHED) {
+        int i = f / 8, k = f % 8;
+        if (k == K_TOGGLE) {
+            g_sched[i].on = !g_sched[i].on;
+            g_sched[i].fired_day = 0;
+            sched_save();
+            redraw();
+        } else if (k == K_DEL) {
+            sched_delete(i);
+        } else {
+            sched_adjust(f, 1, GetKeyState(VK_SHIFT) < 0); /* 클릭하면 한 칸 올림 */
+        }
+    }
+}
+
 static void show_menu(HWND h)
 {
     HMENU m = CreatePopupMenu();
@@ -1221,6 +1636,20 @@ static void on_wheel(int delta, int mods, int src)
         row = row_at(pt.y);
     }
     g_wheel_accum += delta;
+    if (src == WHEEL_FROM_PANEL && g_view == 1) {
+        /* 예약 화면: 한 칸(120)마다 값 하나씩 */
+        if (abs(g_wheel_accum) < WHEEL_DELTA / 2) return;
+        int d = (int)lround((double)g_wheel_accum / WHEEL_DELTA);
+        if (d == 0) d = g_wheel_accum > 0 ? 1 : -1;
+        g_wheel_accum = 0;
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(g_main, &pt);
+        int f = field_at(pt.x, pt.y);
+        g_last_activity = GetTickCount();
+        if (f >= 0 && f < 8 * MAX_SCHED) sched_adjust(f, d, mods & 1);
+        return;
+    }
     if (abs(g_wheel_accum) < WHEEL_DELTA / 4) return; /* 고해상도 휠 대응 */
     double n = (double)g_wheel_accum / WHEEL_DELTA;
     g_wheel_accum = 0;
@@ -1292,6 +1721,12 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             hide_panel(); /* 패널만 닫고 트레이에서 계속 대기 */
             return 0;
         }
+        int f = field_at(x, y);
+        if (f >= 0) {
+            field_click(f);
+            return 0;
+        }
+        if (g_view == 1) return 0;
         int row = row_at(y);
         if (row >= 0) {
             g_drag_row = row;
@@ -1307,7 +1742,12 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             g_close_hover = hov;
             redraw();
         }
-        if (hov) {
+        int hf = field_at(GET_X_LPARAM(l), GET_Y_LPARAM(l));
+        if (hf != g_hover_field) {
+            g_hover_field = hf;
+            redraw();
+        }
+        if (hov || hf >= 0) {
             TRACKMOUSEEVENT t = {sizeof(t), TME_LEAVE, h, HOVER_DEFAULT};
             TrackMouseEvent(&t);
         }
@@ -1315,8 +1755,9 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     }
     case WM_MOUSELEAVE:
-        if (g_close_hover) {
+        if (g_close_hover || g_hover_field >= 0) {
             g_close_hover = 0;
+            g_hover_field = -1;
             redraw();
         }
         return 0;
@@ -1403,11 +1844,34 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             /* 사용하지 않으면 자동으로 사라짐 (마우스가 패널 위에 있거나 드래그 중이면 유지) */
             if (g_drag_row >= 0 || cursor_in_panel()) g_last_activity = GetTickCount();
             else if (g_shown && GetTickCount() - g_last_activity > g_hide_delay) hide_panel();
+        } else if (w == TM_SCHED) {
+            sched_tick();
+        } else if (w == TM_RESUME) {
+            KillTimer(h, TM_RESUME);
+            sched_catch_up();
+        } else if (w == TM_DISPLAY_ON) {
+            /* 모니터가 대기에서 깨어나면 밝기를 다시 보냄 (자고 있는 동안 바뀐 예약 등) */
+            KillTimer(h, TM_DISPLAY_ON);
+            EnterCriticalSection(&g_hw_cs);
+            for (int i = 0; i < g_nmon; i++) g_mon[i].force = 1;
+            LeaveCriticalSection(&g_hw_cs);
+            for (int i = 0; i < g_nmon; i++) apply_mon(i);
         } else if (w == TM_DISPLAY) {
             KillTimer(h, TM_DISPLAY);
             check_display_change();
         }
         return 0;
+    case WM_POWERBROADCAST:
+        if (w == PBT_APMSUSPEND) {
+            g_suspend_min = local_minutes(0, -1, 0);
+        } else if (w == PBT_APMRESUMEAUTOMATIC || w == PBT_APMRESUMESUSPEND) {
+            SetTimer(h, TM_RESUME, 4000, NULL); /* 모니터가 깨어날 시간을 둠 */
+        } else if (w == PBT_POWERSETTINGCHANGE) {
+            POWERBROADCAST_SETTING *ps = (POWERBROADCAST_SETTING *)l;
+            if (ps && ps->DataLength >= sizeof(DWORD) && *(DWORD *)ps->Data == 1 && g_hw_ready)
+                SetTimer(h, TM_DISPLAY_ON, 2500, NULL);
+        }
+        return TRUE;
     case WM_SETTINGCHANGE:
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
             read_theme();
@@ -1542,6 +2006,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     RegisterHotKey(g_main, HK_RESET, MOD_CONTROL | MOD_ALT, VK_HOME);
     g_mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_hook, inst, 0);
     SetTimer(g_main, TM_TOP, 1000, NULL);
+    sched_load();
+    SetTimer(g_main, TM_SCHED, 10000, NULL);
+    {
+        /* 화면 켜짐/꺼짐 알림 (GUID_CONSOLE_DISPLAY_STATE) */
+        static const GUID display_state = {0x6fe69556, 0x704a, 0x47a0, {0x8f, 0x24, 0xc2, 0x8d, 0x93, 0x6f, 0xda, 0x47}};
+        RegisterPowerSettingNotification(g_main, &display_state, DEVICE_NOTIFY_WINDOW_HANDLE);
+    }
 
     apply_all();
     if (!background) PostMessageW(g_main, WM_APP_SHOW, 1, 0); /* 첫 실행: 안내와 함께 잠깐 표시 */
