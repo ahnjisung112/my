@@ -1,7 +1,6 @@
 # 아이콘 생성
 #   app.ico        : 앱 아이콘 (macOS 스타일 스퀘어클 + 그라데이션 + 해)
-#   tray_white.ico : 어두운 작업표시줄용 흰색 해 글리프
-#   tray_black.ico : 밝은 작업표시줄용 검은색 해 글리프
+#   tray.ico       : 트레이 아이콘 (앱 아이콘과 같은 디자인, 작은 크기용으로 단순화)
 import math
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
@@ -92,13 +91,26 @@ def app_icon(n=1024):
     return Image.alpha_composite(shadow, icon)
 
 
-def tray_icon(color):
-    # 크기별로 따로 렌더링해야 작은 크기에서도 또렷함
+def tray_icon():
+    """트레이용: 앱 아이콘과 같은 디자인(그래파이트 스퀘어클 + 노랑-주황 해)을
+    작은 크기에 맞게 단순화. 여백을 줄이고 해와 광선을 굵게, 광택·그림자 없음."""
     imgs = []
     for s in (16, 20, 24, 32, 40, 48, 64):
-        # 작은 크기일수록 선을 굵게
-        w = 0.135 if s <= 20 else (0.11 if s <= 32 else 0.095)
-        imgs.append(sun_glyph(s, color, core=0.215, r0=0.355, r1=0.47, ray_w=w))
+        n = s * 8
+        small = s <= 24
+        mask = squircle_mask(n, n * (0.02 if small else 0.04))
+        bg = vgradient(n, (62, 66, 78), (24, 25, 30))
+        sun_mask = sun_glyph(n, (255, 255, 255, 255),
+                             core=0.19 if small else 0.175,
+                             r0=0.285 if small else 0.27,
+                             r1=0.395 if small else 0.375,
+                             ray_w=0.085 if small else 0.068).split()[3]
+        sun = vgradient(n, (255, 222, 89), (255, 149, 0))
+        sun.putalpha(sun_mask)
+        bg = Image.alpha_composite(bg, sun)
+        icon = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+        icon.paste(bg, (0, 0), mask)
+        imgs.append(icon.resize((s, s), Image.LANCZOS))
     return imgs
 
 
@@ -110,5 +122,4 @@ def save_multi(path, imgs):
 if __name__ == "__main__":
     big = app_icon(1024)
     save_multi("app.ico", [big.resize((s, s), Image.LANCZOS) for s in (256, 128, 64, 48, 40, 32, 24, 20, 16)])
-    save_multi("tray_white.ico", tray_icon((255, 255, 255, 255)))
-    save_multi("tray_black.ico", tray_icon((0, 0, 0, 255)))
+    save_multi("tray.ico", tray_icon())

@@ -87,7 +87,14 @@ static NOTIFYICONDATAW g_nid;
 
 static int g_hw_ready = 0;
 static int g_touched = 0;
-static int g_active = 0;         /* 마지막으로 조절한 모니터 (캡션 표시용) */
+static int g_active = 0;         /* 마지막으로 조절한 모니터 (캡션 표시용, -1 = 전체) */
+
+/* 전체 슬라이더 (값 = 가장 밝은 모니터): 한 번의 조작(드래그·연속 휠) 동안 시작 시점의 모니터별 밝기를
+   기억해 두고 비율로 움직인다. 내리면 같은 비율로 어두워지고(0% = 모두 0), 올리면 모두 100% 쪽으로,
+   시작 위치로 돌아오면 원래 값이 그대로 돌아옴 */
+static double g_mbase[MAX_MON], g_mbase_val, g_mval;
+static int g_mactive = 0;
+static DWORD g_mlast;
 static int g_drag_row = -1;
 static int g_wheel_accum = 0;
 static UINT g_dpi = 96;
@@ -100,7 +107,6 @@ static DWORD g_last_activity;
 static DWORD g_hide_delay = 1600;
 static int g_show_hint = 0;      /* 첫 실행 안내 문구 */
 static int g_dark = 1;           /* 패널 다크 모드 */
-static int g_taskbar_dark = 1;
 static int g_close_hover = 0;    /* 닫기(✕) 버튼 위에 커서 */
 
 /* 밝기 예약 */
@@ -135,7 +141,7 @@ static DWORD g_deact_tick;       /* 바깥 클릭으로 닫힌 시각 (트레이
 static int panel_h(void)
 {
     if (g_view == 1) return SCHED_Y + SCHED_H * g_nsched + (g_nsched < MAX_SCHED ? 40 : 0) + 34;
-    return ROWS_Y + ROW_H * (g_nmon > 0 ? g_nmon : 1) + 28;
+    return ROWS_Y + ROW_H * (g_nmon > 1 ? g_nmon + 1 : 1) + 28;
 }
 
 /* ---------------------------------------------------------------- 밝기 곡선 */
@@ -805,6 +811,11 @@ static int field_at(int x, int y)
     return -1;
 }
 
+/* 밝기 화면의 줄: 모니터가 2대 이상이면 0번 줄이 "전체", 그 아래로 모니터 */
+static int has_master(void) { return g_nmon > 1; }
+static int nrows(void) { return g_nmon + has_master(); }
+static int mon_of_row(int r) { return r - has_master(); } /* -1 = 전체 */
+
 static int row_top(int i) { return panel_rect_client().top + S(ROWS_Y + ROW_H * i); }
 
 static void track_geom(int i, double *x0, double *y0, double *x1, double *y1)
@@ -819,7 +830,7 @@ static void track_geom(int i, double *x0, double *y0, double *x1, double *y1)
 /* 클라이언트 y 좌표가 몇 번째 모니터 줄인지 (-1 = 줄 밖) */
 static int row_at(int y)
 {
-    for (int i = 0; i < g_nmon; i++) {
+    for (int i = 0; i < nrows(); i++) {
         int t = row_top(i);
         if (y >= t - S(4) && y < t + S(TRACK_DY + TRACK_H + 6)) return i;
     }
@@ -849,6 +860,11 @@ static void mode_text(wchar_t *buf, size_t n)
         buf[n - 1] = 0;
         return;
     }
+    if (g_active < 0 && !g_show_hint && g_hw_ready) {
+        wcsncpy(buf, L"전체 · 모니터끼리의 밝기 비율은 그대로 유지돼요", n);
+        buf[n - 1] = 0;
+        return;
+    }
     if (g_show_hint)
         wcsncpy(t, L"아이콘 클릭 또는 아이콘 위에서 휠로 조절", 96);
     else if (!g_hw_ready)
@@ -870,6 +886,8 @@ static void mode_text(wchar_t *buf, size_t n)
         wcsncpy(buf, t, n);
     buf[n - 1] = 0;
 }
+
+static double master_level(void);
 
 /* 원 안의 X (닫기·삭제 버튼) */
 static void draw_x(Canvas *c, double cx, double cy, double r, double lw, Rgba col)
@@ -1029,13 +1047,20 @@ static void render_panel(void)
 
     /* 모니터별 줄: 이름 + 값 + 캡슐 슬라이더 (채움은 최소 트랙 높이(원)부터 — macOS 제어 센터와 동일) */
     if (g_view == 0)
-    for (int i = 0; i < g_nmon; i++) {
-        Mon *m = &g_mon[i];
+    for (int i = 0; i < nrows(); i++) {
+        int mi = mon_of_row(i);
+        double level = mi < 0 ? master_level() : g_mon[mi].level;
         int top = row_top(i);
         RECT rn = {p.left + S(PAD), top, p.right - S(70), top + S(LABEL_H)};
-        draw_text(&g_cv, m->name, rn, f_name, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, secondary);
+        draw_text(&g_cv, mi < 0 ? L"전체" : g_mon[mi].name, rn, mi < 0 ? f_title : f_name,
+                  DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, mi < 0 ? primary : secondary);
+        if (mi < 0) {
+            /* 전체 줄 아래 구분선 */
+            Rgba line = border;
+            fill_rrect(&g_cv, p.left + S(PAD), row_top(1) - S(6), p.right - S(PAD), row_top(1) - S(6) + 1, 0, line);
+        }
         wchar_t lv[16];
-        format_level(m->level, lv, 16);
+        format_level(level, lv, 16);
         RECT rv = {p.right - S(80), top, p.right - S(PAD), top + S(LABEL_H)};
         draw_text(&g_cv, lv, rv, f_value, DT_RIGHT | DT_VCENTER, secondary);
 
@@ -1043,7 +1068,7 @@ static void render_panel(void)
         track_geom(i, &tx0, &ty0, &tx1, &ty1);
         double th = ty1 - ty0, tr = th / 2;
         fill_rrect(&g_cv, tx0, ty0, tx1, ty1, tr, track);
-        double fw = th + (tx1 - tx0 - th) * m->level / 100.0;
+        double fw = th + (tx1 - tx0 - th) * level / 100.0;
         if (!g_dark) shadow_rrect(&g_cv, tx0, ty0 + 1, tx0 + fw, ty1 + 1, tr, S(3), 0.10);
         fill_rrect(&g_cv, tx0, ty0, tx0 + fw, ty1, tr, fill);
         draw_sun(&g_cv, tx0 + tr, ty0 + tr, th * 0.62, glyph);
@@ -1051,7 +1076,7 @@ static void render_panel(void)
 
     wchar_t mode[160];
     mode_text(mode, 160);
-    int cy = g_view == 1 ? p.bottom - S(32) : row_top(g_nmon) - S(6);
+    int cy = g_view == 1 ? p.bottom - S(32) : row_top(nrows()) - S(6);
     RECT rm = {p.left + S(PAD), cy, p.right - S(PAD), cy + S(20)};
     draw_text(&g_cv, mode, rm, f_caption, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS, secondary);
 
@@ -1082,14 +1107,9 @@ static void read_theme(void)
 {
     DWORD v = 0, sz = sizeof(v);
     g_dark = 1;
-    g_taskbar_dark = 1;
     if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
                      L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &v, &sz) == ERROR_SUCCESS)
         g_dark = v == 0;
-    sz = sizeof(v);
-    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                     L"SystemUsesLightTheme", RRF_RT_REG_DWORD, NULL, &v, &sz) == ERROR_SUCCESS)
-        g_taskbar_dark = v == 0;
 }
 
 static UINT monitor_dpi(HMONITOR mon)
@@ -1202,8 +1222,7 @@ static HICON tray_icon(void)
 {
     /* DPI 인식 프로세스이므로 SM_CXSMICON 이 현재 배율에 맞는 크기(16/20/24/32…)를 돌려줌 */
     int sz = GetSystemMetrics(SM_CXSMICON);
-    return (HICON)LoadImageW(g_inst, MAKEINTRESOURCEW(g_taskbar_dark ? IDI_TRAY_WHITE : IDI_TRAY_BLACK),
-                             IMAGE_ICON, sz, sz, 0);
+    return (HICON)LoadImageW(g_inst, MAKEINTRESOURCEW(IDI_TRAY), IMAGE_ICON, sz, sz, 0);
 }
 
 static void tray_tip_text(wchar_t *buf, size_t n)
@@ -1322,30 +1341,86 @@ static void set_level(int i, double v)
     redraw();
 }
 
-/* i < 0 이면 모든 모니터 */
+/* 전체 슬라이더에 표시할 값: 조작 중이면 그 값, 아니면 가장 밝은 모니터 */
+static double master_level(void)
+{
+    if (g_mactive && GetTickCount() - g_mlast < 1500) return g_mval;
+    double mx = 0;
+    for (int i = 0; i < g_nmon; i++)
+        if (g_mon[i].level > mx) mx = g_mon[i].level;
+    return mx;
+}
+
+static void master_begin(int fresh)
+{
+    if (fresh || !g_mactive || GetTickCount() - g_mlast > 800) {
+        for (int i = 0; i < g_nmon; i++) g_mbase[i] = g_mon[i].level;
+        g_mactive = 0; /* master_level() 이 현재 최댓값을 돌려주도록 */
+        g_mbase_val = g_mval = master_level();
+        g_mactive = 1;
+    }
+    g_mlast = GetTickCount();
+}
+
+static void master_apply(void)
+{
+    double M = g_mbase_val;
+    for (int i = 0; i < g_nmon; i++) {
+        double b = g_mbase[i], v;
+        if (M <= 0.0) v = g_mval;                                       /* 모두 0 에서 시작 */
+        else if (g_mval <= M) v = b * g_mval / M;                      /* 같은 비율로 어둡게 */
+        else v = M >= 100.0 ? b : b + (100.0 - b) * (g_mval - M) / (100.0 - M); /* 100% 쪽으로 */
+        set_level(i, v);
+    }
+    g_active = -1;
+    redraw();
+}
+
+static void master_set(double v, int fresh)
+{
+    master_begin(fresh);
+    g_mval = v < 0 ? 0 : (v > 100 ? 100 : v);
+    master_apply();
+}
+
+/* i < 0 이면 모든 모니터 (전체 슬라이더처럼 비율을 유지하며) */
 static void step(int i, double d)
 {
     if (i >= 0) {
+        g_mactive = 0;
         set_level(i, g_mon[i].level + d);
         return;
     }
-    for (int k = 0; k < g_nmon; k++) set_level(k, g_mon[k].level + d);
+    if (g_nmon == 1) {
+        set_level(0, g_mon[0].level + d);
+        return;
+    }
+    master_begin(0);
+    master_set(g_mval + d, 0);
 }
 
 static void set_all(double v)
 {
+    g_mactive = 0;
     for (int k = 0; k < g_nmon; k++) set_level(k, v);
 }
 
-static void track_set_from_x(int i, int x)
+/* r = 표시 줄 번호, fresh = 드래그 시작 */
+static void track_set_from_x(int r, int x, int fresh)
 {
     double tx0, ty0, tx1, ty1;
-    track_geom(i, &tx0, &ty0, &tx1, &ty1);
+    track_geom(r, &tx0, &ty0, &tx1, &ty1);
     double th = ty1 - ty0;
     double t = (x - tx0 - th / 2) / (tx1 - tx0 - th);
     if (t < 0) t = 0;
     if (t > 1) t = 1;
-    set_level(i, round(t * 100.0));
+    int mi = mon_of_row(r);
+    if (mi < 0) {
+        master_set(round(t * 100.0), fresh);
+    } else {
+        g_mactive = 0;
+        set_level(mi, round(t * 100.0));
+    }
 }
 
 /* 검은 막을 걷고 모니터 밝기를 프로그램 시작 전 값으로 */
@@ -1634,6 +1709,7 @@ static void on_wheel(int delta, int mods, int src)
         GetCursorPos(&pt);
         ScreenToClient(g_main, &pt);
         row = row_at(pt.y);
+        if (row >= 0) row = mon_of_row(row); /* 전체 줄이면 -1 */
     }
     g_wheel_accum += delta;
     if (src == WHEEL_FROM_PANEL && g_view == 1) {
@@ -1731,7 +1807,7 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
         if (row >= 0) {
             g_drag_row = row;
             SetCapture(h);
-            track_set_from_x(row, x);
+            track_set_from_x(row, x, 1);
         }
         return 0;
     }
@@ -1751,7 +1827,7 @@ static LRESULT CALLBACK main_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             TRACKMOUSEEVENT t = {sizeof(t), TME_LEAVE, h, HOVER_DEFAULT};
             TrackMouseEvent(&t);
         }
-        if (g_drag_row >= 0) track_set_from_x(g_drag_row, GET_X_LPARAM(l));
+        if (g_drag_row >= 0) track_set_from_x(g_drag_row, GET_X_LPARAM(l), 0);
         return 0;
     }
     case WM_MOUSELEAVE:
